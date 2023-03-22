@@ -14,6 +14,27 @@ from torch.nn import functional as F
 from utils import bbox_iou, xywh_to_xyxy
 import math
 
+
+class MultiLoss(nn.Module):
+    '''
+    Author: Pume Tuchinda
+    Multi Task Loss Function
+        - Acts entirely as just a combination of the two losses for the two task we are doing
+    '''
+    def __init__(self, alpha_det=1, alpha_lane=1):
+        self.det_loss = DetectionLoss()
+        self.lane_loss = SegmentationLoss()
+        self.alpha_det = alpha_det
+        self.alpha_lane = alpha_lane
+
+    def forward(self, dets, lanes, drivable, det_targets, lane_targets, drivable_targets):
+        det_loss = self.det_loss(dets, det_targets)    
+        lane_loss = self.lane_loss(lanes, lane_targets)
+        drive_loss = self.lane_loss(drivable, drivable_targets)
+
+        return self.alpha_det * det_loss + self.alpha_lane * lane_loss + self.alpha_lane * drive_loss
+
+
 '''
 Complete-IoU Loss: Calculates the detection loss of a bounding box prediction by evaluating three metrics:
 Loss related to the IOU, the center coordinate placement, and aspect ratio consistency of detected bounding box
