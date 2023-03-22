@@ -19,7 +19,9 @@ class MultiLoss(nn.Module):
         self.alpha_det = alpha_det
         self.alpha_lane = alpha_lane
 
-    def forward(self, dets, lanes, drivable, det_targets, lane_targets, drivable_targets):
+    def forward(self, dets, seg, det_targets, lane_targets, drivable_targets):
+        lanes = seg[... , 0:9]
+        drivable = seg[... , 9:12]
         det_loss = self.det_loss(dets, det_targets)    
         lane_loss = self.lane_loss(lanes, lane_targets)
         drive_loss = self.lane_loss(drivable, drivable_targets)
