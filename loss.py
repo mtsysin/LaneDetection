@@ -1,19 +1,10 @@
-'''
-YOLOv4 Loss Implementation
-- Author: William Stevens
-Computes loss given a detected bounding box and the groundtruth data.
-As the YOLOv4 paper (https://arxiv.org/abs/2004.10934) indicates, Complete-IOU loss and Focal loss remain to be
-effective loss functions. (https://arxiv.org/pdf/1911.08287.pdf, https://arxiv.org/pdf/1708.02002.pdf)
-'''
-
-
-''' IMPORTS '''
 import torch
 import torch.nn as nn
-from torch.nn import functional as F
-from utils import bbox_iou, xywh_to_xyxy
-import math
+import torch.nn.functional as F
 
+from evaluate import DetectionMetric
+
+ANCHORS = [[(12,16),(19,36),(40,28)], [(36,75),(76,55),(72,146)], [(142,110),(192,243),(459,401)]]
 
 class MultiLoss(nn.Module):
     '''
@@ -35,83 +26,154 @@ class MultiLoss(nn.Module):
         return self.alpha_det * det_loss + self.alpha_lane * lane_loss + self.alpha_lane * drive_loss
 
 
-'''
-Complete-IoU Loss: Calculates the detection loss of a bounding box prediction by evaluating three metrics:
-Loss related to the IOU, the center coordinate placement, and aspect ratio consistency of detected bounding box
-'''
-class CompleteIoULoss(nn.Module):    
-    def __init__(self, eps:float = 1e-6):
-        '''
-        Initialize epsilon constant as 10^-6
-        '''
+
+class DetectionLoss(nn.Module):
+    '''
+    Author: William Stevens
+            Pume Tuchinda
+    Detection Loss Function:
+        1. Distance IOU Loss (size and location of bounding box)
+            - Loss related to IOU of bounding box
+            - Loss related to center placement of bounding box
+            - Loss related to aspect ratio of bounding box
+        2. Focal Loss (classification of object)
+            - Classification loss
+    Args:
+        batch_size (int): number of batches
+        n_classes (int): number of classes in dataset      
+        alpha_class (float): loss parameter for classification
+        alpha_box (float):  loss parameter for bounding box 
+        alpha_obj (float): loss parameter for object score
+    '''
+    def __init__(self, n_classes=13, alpha_class=1., alpha_box=1., alpha_obj=1., anchors=()):
         super().__init__()
-        self.eps = eps
+        self.metric = DetectionMetric()
 
-    def forward(self, pred: torch.Tensor, target:torch.Tensor):
+        self.C = n_classes
+        self.alpha_class = alpha_class
+        self.alpha_box = alpha_box
+        self.alpha_obj = alpha_obj
+        self.anchors = ANCHORS
+
+    def forward(self, preds, targets):
         '''
-        Params:
-        - pred (Tensor): detected bounding box tensor from the model, shape: (N, 4)
-        - target (Tensor): bounding box groundtruth data, shape: (M, 4)
+        Forward pass of Detection Loss
+        Args:
+            preds (tensor): [det_head1, det_head2, det_head3]
+                - each det_head is a detection from the different scales where we are detection bbox
+                - det_head shape: (batch_size, n_anchors, scale, scale, num_classes + 5)
+            target (tensor): Groundtruth, size : (batch_size, n_anchors, scale, scale, n_classes + 5)
+        Returns:
+            loss (tensor): loss value
         '''
-        # Compute IOU using function in utils/utils.py
-        iou = bbox_iou(pred, target)
+        ciou_loss = 0
+        for i, pred in enumerate(preds):
+            target = targets[i].to(pred.device)
+            Iobj = target[..., self.C] == 1
+            Inoobj = target[..., self.C] == 0
+ 
+            batch_size, n_anchors, gy, gx, n_outputs = pred.shape
+            gridy, gridx = torch.meshgrid([torch.arange(gy), torch.arange(gx)], indexing='ij')
+            anchor = torch.tensor(self.anchors[i]).view(1, 3, 1, 1, 2).to(pred.device)
 
-        # Compute penalty term for distance between bounding box centers
-        
-        # Compute square of distance between bounding box centers
-        center_dist_sq = (target[0] - pred[0])**2 + (target[1] - pred[1])**2
-        # Compute convex box width and height
-        pred_ = xywh_to_xyxy(pred)
-        targ_ = xywh_to_xyxy(target)
-        convex_width = max(pred_[2], targ_[2]) - min(pred_[0], targ_[0])
-        convex_height = max(pred_[3], targ_[3]) - min(pred_[1], targ_[1])
-        # Compute square of convex diagonal
-        convex_diag_sq = convex_width ** 2 + convex_height ** 2 + self.eps
+            target[..., self.C+3:self.C+5] = torch.log(1e-6 + target[..., self.C+3:self.C+5] / anchor)
 
-        # Penalty term is: (center distance)^2 / (convex diagonal length)^2
-        dist_penalty = center_dist_sq / convex_diag_sq
+            pred[..., self.C+1:self.C+3] = pred[..., self.C+1:self.C+3].sigmoid()
+            #pred[..., self.C+3:self.C+5] = pred[..., self.C+3:self.C+5].exp() * anchor
 
-        # Compute consistenty of aspect ratio: v
-        rho = ((target[:,0] + target[:,2] - pred[0] - pred[2]) ** 2 + (target[:,1] + target[:,3] - pred[1] - pred[3]) ** 2) / 4
-        v = (4 / math.pi ** 2) * torch.pow(torch.atan())
-        # Compute positive trade-off parameter alpha
-        alpha = v / ((1 + self.eps) - iou + v)
+            iou = self.metric.box_iou(pred[..., self.C+1:self.C+5][Iobj], target[..., self.C+1:self.C+5][Iobj], xyxy=False, CIoU=True).mean()
+            ciou_loss += 1 - iou
 
-        # Return computed Complete-IOU loss
-        ciou = iou + dist_penalty - (rho / convex_diag_sq + v * alpha) 
-        return (1 - ciou).mean()
+            #print(f'prediction: {pred[..., self.C+1:self.C+5][Iobj]}')
+            #print(f' target: {target[..., self.C+1:self.C+5][Iobj]}')
 
-'''
-Focal Loss: Enhancement to cross entropy loss which improves classification accuracy caused by class imbalances.
-''' 
-class FocalLoss(nn.Module):
+            obj_loss = self._focal_loss(pred[..., self.C:self.C+1][Iobj], target[..., self.C:self.C+1][Iobj])
+            noobj_loss = self._focal_loss(pred[..., self.C:self.C+1][Inoobj], target[..., self.C:self.C+1][Inoobj])
+
+            class_loss = self._focal_loss(pred[..., :self.C][Iobj], target[..., :self.C][Iobj])
+
+        return self.alpha_box * ciou_loss + self.alpha_class * class_loss + self.alpha_obj * (obj_loss + noobj_loss)
+    
+    def _focal_loss(self, preds, targets, alpha=0.25, gamma=2):
+        '''
+        Focal Loss Implementation
+        Author: William Stevens
+        - Inspired by the official paper on Focal Loss (https://arxiv.org/abs/1708.02002)
+        - Enhancement to cross entropy loss which improves classification accuracy casued by class imbalances.
+        Args:
+            - preds (tensor): prediction tensor containing confidence scores for each class.
+            - target (tensor): ground truth containing correct class labels.
+            - alpha (tensor): class weights to represent the class imbalance.
+            - gamma (int): Focal term. Constant, tunable exponent applied to the modulating factor which amplifies
+            loss emphasis on difficult learning tasks that result in misclassification.
+        '''
+        p = torch.sigmoid(preds)
+        ce_loss = F.binary_cross_entropy_with_logits(preds, targets, reduction='mean')
+        p_t = p * targets + (1 - p) * (1 - targets)
+        loss = ce_loss * ((1 - p_t) ** gamma)
+
+        if alpha >= 0:
+            alpha_t = alpha * targets + (1 - alpha) * (1 - targets)
+            loss *= alpha_t 
+
+        return loss.mean() 
+
+class SegmentationLoss(nn.Module):
+    '''
+    Segmentation Loss Function:
+        1. Dice Binary Cross Entropy Loss
+        2. IOU Loss 
+            - only used for lane due to the thiness of the lane lines
+    Author: Daniyaal Rasheed
+            Pume Tuchinda
+    Args:
+        - preds (tensor): prediction tensor containing probaility of whether a pixel is a type of lane or not
+        - target (tensor): ground truth containing correct classification.
+    Returns:
+        - IOU loss (scalar): Summation of IOU for every lane in the batch
+    '''
     def __init__(self):
-        
         super().__init__()
+        self.epsilon = 1e-6
 
-    def forward(self, pred, target, alpha=None, gamma=0):
-        '''
-        Params:
-        - pred (Tensor): prediction tensor containing confidence scores for each class.
-        - target (Tensor): ground truth containing correct class labels.
-        - alpha: class weights to represent the class imbalance.
-        - gamma: Focal term. Constant, tunable exponent applied to the modulating factor which amplifies
-        loss emphasis on difficult learning tasks that result in misclassification.
-        '''
-        nll_loss = nn.NLLLoss(weight=alpha, reduction='none')
+    def _focal_loss(self, pred, target):
+        num_classes = pred.size(1)
+        target = target.squeeze(dim=1)
+        loss = 0
 
-        # Weighted cross entropy: alpha * -log(pt)
-        log_p = F.log_softmax(pred, dim=-1)
-        ce = nll_loss(log_p, target)
+        for cls in range(num_classes):
+            targetClass = target[:, cls, ...]
+            predClass = pred[:, cls, ...]
 
-        # Get class column from rows
-        rows = torch.arange(len(pred))
-        log_pt = log_p[rows, target]
+            logpt = F.binary_cross_entropy_with_logits(predClass, targetClass, reduction='none')
+            pt = torch.exp(-logpt)
+            focal = (1 - pt).pow(2)
 
-        # Focal term: (1 - pt)^gamma
-        pt = log_pt.exp()
-        focal_term = (1 - pt)**(gamma)
+            classLoss = focal * logpt
+            loss += classLoss.mean()
+        
+        return loss
 
-        focal_loss = focal_term * ce
+    # def _dice_loss(self, pred, target):
+    #     batchSize, numClasses = pred.size(0), pred.size(1)
+    #     target = target.view(batchSize, numClasses, -1)
+    #     pred = pred.view(batchSize, numClasses, -1)
 
-        return focal_loss.mean()
+    #     target = F.one_hot(target.long(), numClasses).permute(0, 2, 1)
+    
+    #     intersection = torch.sum(pred * target, dim=(0,2))
+    #     cardinality = torch.sum(pred + target, dim=(0,2))
+
+    #     diceScore = (2 * intersection) / cardinality.clamp(1e-6)
+
+    #     loss = 1 - diceScore
+    #     mask = target.sum((0,2)) > 0
+    #     loss * mask.to(loss.dtype)
+
+    #     return loss.mean()
+
+    def forward(self, pred, target):
+        focalLoss = self._focal_loss(pred, target)
+        #diceLoss = self._dice_loss(pred, target)
+
+        return focalLoss# + diceLoss
