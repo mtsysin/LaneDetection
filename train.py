@@ -7,7 +7,7 @@ import torch.utils.data as data
 from torch.utils.tensorboard import SummaryWriter
 
 from model import YoloMulti
-from data_loader import BDD100k
+from bdd100k import BDD100k
 #rom utils import non_max_supression, mean_average_precission, intersection_over_union
 from loss import MultiLoss
 
@@ -26,7 +26,7 @@ Author: Pume Tuchinda
 '''
 
 
-ANCHORS = [[(3,9),(5,11),(4,20)], [(7,18),(6,39),(12,31)], [(19,50),(38,81),(68,157)]]
+ANCHORS = [[(12,16),(19,36),(40,28)], [(36,75),(76,55),(72,146)], [(142,110),(192,243),(459,401)]]
 
 def parse_arg():
     parser = argparse.ArgumentParser()
@@ -52,8 +52,8 @@ def main():
         transforms.Resize((384, 640), interpolation=transforms.InterpolationMode.NEAREST),
     ])
     #Load BDD100k Dataset
-    train_dataset = BDD100k(root='/home/pumetu/Purdue/LaneDetection/BDD100k/', train=True, transform=transform, anchors=ANCHORS)
-    val_dataset = BDD100k(root='/home/pumetu/Purdue/LaneDetection/BDD100k/', train=False, transform=transform, anchors=ANCHORS)
+    train_dataset = BDD100k(root='/data/stevenwh/bdd100k/', train=True, transform=transform, anchors=ANCHORS)
+    val_dataset = BDD100k(root='/data/stevenwh/bdd100k/', train=False, transform=transform, anchors=ANCHORS)
 
     train_loader = data.DataLoader(dataset=train_dataset, 
                                 batch_size=args.batch,

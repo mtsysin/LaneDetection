@@ -37,10 +37,12 @@ class TestBDD100k(unittest.TestCase):
              pass
 
 
-#Test Dataloader
-
-#test = TestBDD100k()
-#test.test_multi_process_dataloader()
+#Test Dataloader 1
+'''
+test = TestBDD100k()
+test.test_multi_process_dataloader()
+'''
+#Test Dataloader 2
 
 print("Beginning dataloader tests...")
 

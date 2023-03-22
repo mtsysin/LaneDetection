@@ -99,16 +99,16 @@ class SegmentationHead(nn.Module):
 
         return f0
 
-class YOLOP(nn.Module):
+class YoloMulti(nn.Module):
     '''
-    YOLOP Model Implementation to achieve Multi-Task Object Detection and Lane/Drivable Area Segmentation
+    YoloMulti Model Implementation to achieve Multi-Task Object Detection and Lane/Drivable Area Segmentation
     (YOLOv4 for Object Detection and U-Net for Lane/Drivable Segmentation)
     - Author: William Steven
     - Credit: Pume Tuchinda
     '''
     def __init__(self, obj_classes=13, lane_classes=9, drivable_classes=3, num_anchors=3):
         '''
-        Initialize YOLOP object: Multi-Task Object Detection and Lane/Drivable Area Segmentation
+        Initialize YoloMulti object: Multi-Task Object Detection and Lane/Drivable Area Segmentation
         Define function calls to be used in forward pass:
         - Define segmenation classes (lane classes + drivable area classes)
 
