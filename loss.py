@@ -13,6 +13,7 @@ class MultiLoss(nn.Module):
         - Acts entirely as just a combination of the two losses for the two task we are doing
     '''
     def __init__(self, alpha_det=1, alpha_lane=1):
+        super().__init__()
         self.det_loss = DetectionLoss()
         self.lane_loss = SegmentationLoss()
         self.alpha_det = alpha_det
