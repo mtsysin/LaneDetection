@@ -3,11 +3,10 @@ from torch.utils.data import DataLoader
 import unittest
 import torchvision.transforms as transforms
 import torch.utils.data as data
+import time
 
 from bdd100k import BDD100k
 
-
-ANCHORS = [[(12,16),(19,36),(40,28)], [(36,75),(76,55),(72,146)], [(142,110),(192,243),(459,401)]]
 
 class TestBDD100k(unittest.TestCase):
     def test_single_process_dataloader(self):
@@ -43,19 +42,33 @@ class TestBDD100k(unittest.TestCase):
 #test = TestBDD100k()
 #test.test_multi_process_dataloader()
 
+print("Beginning dataloader tests...")
+
+ANCHORS = [[(12,16),(19,36),(40,28)], [(36,75),(76,55),(72,146)], [(142,110),(192,243),(459,401)]]
+
 transform = transforms.Compose([
 transforms.Resize((384, 640), interpolation=transforms.InterpolationMode.NEAREST),
 ])
 #Load BDD100k Dataset
-train_dataset = BDD100k(root='/home/stevenwh/data/bdd100k/', train=True, transform=transform, anchors=ANCHORS)
-val_dataset = BDD100k(root='/home/stevenwh/data/bdd100k/', train=False, transform=transform, anchors=ANCHORS)
+train_dataset = BDD100k(root='/data/stevenwh/bdd100k/', train=True, transform=transform, anchors=ANCHORS)
+val_dataset = BDD100k(root='/data/stevenwh/bdd100k/', train=False, transform=transform, anchors=ANCHORS)
+
+train_start = time.time()
 
 train_loader = data.DataLoader(dataset=train_dataset,
                             batch_size=2,
                             num_workers=12, # start at 12, go up to 20 to see which is faster
-                            shuffle=True)
+                            shuffle=True)   # 12 WAS FASTER. And doing 20 gave a warning
+train_end = time.time()
+print("Training: ", (train_end - train_start))
+
+val_start = time.time()
 val_loader = data.DataLoader(dataset=val_dataset, 
                             batch_size=2,
                             num_workers=12,
                             shuffle=False)
+val_end = time.time()
+print("Validation: ", (val_end - val_start))
+
 imgs, dets, lanes, drives = next(iter(val_loader))
+
