@@ -1,5 +1,6 @@
 import argparse
 
+import os
 import torch
 import torchvision.transforms as transforms
 import torch.optim as optim
@@ -8,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from model import YoloMulti
 from bdd100k import BDD100k
-#rom utils import non_max_supression, mean_average_precission, intersection_over_union
+#from utils import non_max_supression, mean_average_precission, intersection_over_union
 from loss import MultiLoss
 
 import matplotlib.pyplot as plt
@@ -17,7 +18,9 @@ import tqdm
 from torch.utils.tensorboard import SummaryWriter
 writer = SummaryWriter('runs/prototype_lane');
 
-device = torch.device('cuda')
+#os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
+device = torch.cuda.set_device(1)
 print(f"CUDA device: {torch.cuda.current_device()}")
 print(f"CUDA device count: {torch.cuda.device_count()}")
 
@@ -72,9 +75,9 @@ def main():
             model.train()
             running_loss = 0
 
-            pdet, plane, pdrive = model(imgs)
+            pdet, pseg = model(imgs)
             lane = lane.squeeze(dim=2)
-            loss = loss_fn(pdet, plane, pdrive, det, lane, drivable)
+            loss = loss_fn(pdet, pseg, det, lane, drivable)
 
             optimizer.zero_grad()
             loss.backward()
