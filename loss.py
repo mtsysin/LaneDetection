@@ -6,7 +6,6 @@ As the YOLOv4 paper (https://arxiv.org/abs/2004.10934) indicates, Complete-IOU l
 effective loss functions. (https://arxiv.org/pdf/1911.08287.pdf, https://arxiv.org/pdf/1708.02002.pdf)
 '''
 
-
 ''' IMPORTS '''
 import torch
 import torch.nn as nn
@@ -64,11 +63,15 @@ class CompleteIoULoss(nn.Module):
 Focal Loss: Enhancement to cross entropy loss which improves classification accuracy caused by class imbalances.
 ''' 
 class FocalLoss(nn.Module):
-    def __init__(self):
+    def __init__(self,
+            alpha=None, 
+            gamma=0):
         
         super().__init__()
+        self.alpha = alpha
+        self.gamma = gamma
 
-    def forward(self, pred, target, alpha=None, gamma=0):
+    def forward(self, pred, target):
         '''
         Params:
         - pred (Tensor): prediction tensor containing confidence scores for each class.
@@ -77,7 +80,7 @@ class FocalLoss(nn.Module):
         - gamma: Focal term. Constant, tunable exponent applied to the modulating factor which amplifies
         loss emphasis on difficult learning tasks that result in misclassification.
         '''
-        nll_loss = nn.NLLLoss(weight=alpha, reduction='none')
+        nll_loss = nn.NLLLoss(weight=self.alpha, reduction='none')
 
         # Weighted cross entropy: alpha * -log(pt)
         log_p = F.log_softmax(pred, dim=-1)
@@ -89,8 +92,26 @@ class FocalLoss(nn.Module):
 
         # Focal term: (1 - pt)^gamma
         pt = log_pt.exp()
-        focal_term = (1 - pt)**(gamma)
+        focal_term = (1 - pt)**(self.gamma)
 
         focal_loss = focal_term * ce
 
         return focal_loss.mean()
+    
+'''
+YOLOv4 loss combined for object detection
+''' 
+
+class DetLoss(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def forward(self, pred, target):
+        '''
+        Params:
+        - pred (Tensor): prediction tensor containing confidence scores for each class.
+        - target (Tensor): ground truth containing correct class labels.
+        - alpha: class weights to represent the class imbalance.
+        - gamma: Focal term. Constant, tunable exponent applied to the modulating factor which amplifies
+        loss emphasis on difficult learning tasks that result in misclassification.
+        '''

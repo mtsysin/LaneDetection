@@ -17,8 +17,17 @@ class BDD100k(data.Dataset):
     BDD100k Class object to be used statically
     - Loads the BDD100k .json data files to store groundtruth data in tensors to be sent to model for training
     '''
-    def __init__(self, root: str = '../bdd100k/', transforms: transforms = None, training: bool = False, input_size: tuple = (416, 416), anchors: List = [[[12, 16], [19, 36], [40, 28]],
-                                                                                                                        [[36, 75], [76, 55], [72, 146]],
+    def __init__(self, 
+            root: str = '../bdd100k/', 
+            transforms: transforms = None, 
+            training: bool = False, 
+            input_size: tuple = (416, 416), 
+            anchors: List = [
+                [[12, 16], [19, 36], [40, 28]],
+                [[36, 75], [76, 55], [72, 146]],
+                [[142, 110], [192, 243], [459, 401]]
+            ]
+        ):
         '''
         Params:
         - root: path to root folder of dataset
@@ -26,7 +35,7 @@ class BDD100k(data.Dataset):
         - training: boolean variable to indicate whether this dataset loader will be used for training or validation
         - input_size: shape of input images. Set to 416x416 for BDD100k images
         - anchors: list of anchor shapes for model. 3 anchors per scale, 9 in total
-        '''                                                                                                         [[142, 110], [192, 243], [459, 401]]]):
+        '''    
         super().__init__()
         self.root = root
         self.training = training
@@ -137,3 +146,20 @@ class BDD100k(data.Dataset):
 def collate_fn(batch):
     imgs, targets = zip(*batch)
     return torch.stack(imgs, 0), targets
+
+if __name__=="__main__":
+    '''
+    Test dataloader func
+    '''
+    ROOT = "bdd100k/"
+
+    dataset = BDD100k(
+        root=ROOT,
+        training=True,
+    )
+
+    img, target = dataset[4]
+
+    print(target)
+    print(img)
+    
