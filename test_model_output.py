@@ -1,8 +1,8 @@
 import torch
-from model import YOLOP
+from model import YoloMulti
 
 x = torch.randn(2, 3, 416, 416)
-model = YOLOP()
+model = YoloMulti()
 det, seg = model(x)
 print(f'Detection scale 1 {det[0].shape}')
 print(f'Detection scale 2 {det[1].shape}')

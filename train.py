@@ -1,23 +1,38 @@
 import argparse
 
+import os
 import torch
 import torchvision.transforms as transforms
 import torch.optim as optim
 import torch.utils.data as data
 from torch.utils.tensorboard import SummaryWriter
 
+<<<<<<< HEAD
 from model import YOLOP
 from bdd100k import BDD100k
 # from utils import non_max_supression, mean_average_precission, intersection_over_union
 # from loss import MultiLoss
+=======
+from model import YoloMulti
+from bdd100k import BDD100k
+#from utils import non_max_supression, mean_average_precission, intersection_over_union
+from loss import MultiLoss
+
+>>>>>>> master
 import matplotlib.pyplot as plt
 import tqdm
 
 from torch.utils.tensorboard import SummaryWriter
 writer = SummaryWriter('runs/prototype_lane');
 
+<<<<<<< HEAD
 device = torch.device('cuda')
 print(torch.cuda.is_available())
+=======
+#os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
+device = torch.cuda.set_device(1)
+>>>>>>> master
 print(f"CUDA device: {torch.cuda.current_device()}")
 print(f"CUDA device count: {torch.cuda.device_count()}")
 
@@ -27,7 +42,7 @@ Author: Pume Tuchinda
 
 BDD_100K_ROOT = ".bdd100k/"
 
-ANCHORS = [[(3,9),(5,11),(4,20)], [(7,18),(6,39),(12,31)], [(19,50),(38,81),(68,157)]]
+ANCHORS = [[(12,16),(19,36),(40,28)], [(36,75),(76,55),(72,146)], [(142,110),(192,243),(459,401)]]
 
 def parse_arg():
     parser = argparse.ArgumentParser()
@@ -64,8 +79,13 @@ def main():
     ])
 
     #Load BDD100k Dataset
+<<<<<<< HEAD
     train_dataset = BDD100k(root=BDD_100K_ROOT, train=True, transform=transform, anchors=ANCHORS)
     # val_dataset = BDD100k(root='/home/pumetu/Purdue/LaneDetection/BDD100k/', train=False, transform=transform, anchors=ANCHORS)
+=======
+    train_dataset = BDD100k(root='/data/stevenwh/bdd100k/', train=True, transform=transform, anchors=ANCHORS)
+    val_dataset = BDD100k(root='/data/stevenwh/bdd100k/', train=False, transform=transform, anchors=ANCHORS)
+>>>>>>> master
 
     train_loader = data.DataLoader(dataset=train_dataset, 
                                 batch_size=args.batch,
@@ -88,9 +108,13 @@ def main():
             imgs, seg = imgs.to(device), seg.to(device)  
             running_loss = 0
 
+<<<<<<< HEAD
             det_pred, seg_pred = model(imgs)
+=======
+            pdet, pseg = model(imgs)
+>>>>>>> master
             lane = lane.squeeze(dim=2)
-            loss = loss_fn(pdet, plane, pdrive, det, lane, drivable)
+            loss = loss_fn(pdet, pseg, det, lane, drivable)
 
             optimizer.zero_grad()
             loss.backward()
