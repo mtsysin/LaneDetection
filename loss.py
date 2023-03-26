@@ -84,6 +84,10 @@ class DetectionLoss(nn.Module):
             pred[..., self.C+1:self.C+3] = pred[..., self.C+1:self.C+3].sigmoid()
             #pred[..., self.C+3:self.C+5] = pred[..., self.C+3:self.C+5].exp() * anchor
 
+
+            print(pred.shape)
+            print(target.shape)
+
             iou = self.metric.box_iou(pred[..., self.C+1:self.C+5][Iobj], target[..., self.C+1:self.C+5][Iobj], xyxy=False, CIoU=True).mean()
             ciou_loss += 1 - iou
 
