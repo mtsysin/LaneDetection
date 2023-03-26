@@ -18,8 +18,6 @@ import tqdm
 from torch.utils.tensorboard import SummaryWriter
 writer = SummaryWriter('runs/prototype_lane');
 
-#os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-
 device = torch.cuda.set_device(1)
 print(f"CUDA device: {torch.cuda.current_device()}")
 print(f"CUDA device count: {torch.cuda.device_count()}")
@@ -38,7 +36,7 @@ def parse_arg():
     parser.add_argument('--epoch', type=int, default=100, help='epochs')
     parser.add_argument('--num_workers', type=int, default=12, help='number of workers')
     # Fix root below
-    parser.add_argument('--root', type=str, default='/home/pumetu/Purdue/LaneDetection/BDD100k/', help='root directory for both image and labels')
+    parser.add_argument('--root', type=str, default='/data/stevenwh/bdd100k/', help='root directory for both image and labels')
     parser.add_argument('--cp', '-checkpoint', type=str, default='', help='path to checpoint of pretrained model')
     return parser.parse_args()
 
@@ -70,7 +68,7 @@ def main():
                                 num_workers=args.num_workers,
                                 shuffle=False)
                   
-    imgs, det, lane, drivable = next(iter(train_loader)) # First batch
+    imgs, det, seg = next(iter(train_loader)) # First batch
     model.train()
 
     for epoch in tqdm.tqdm(range(args.epoch)):
@@ -78,13 +76,13 @@ def main():
         #Train
         
         #for imgs, det, lane, drivable in train_loader:
-        imgs, lane, drivable = imgs.to(device), lane.to(device), drivable.to(device)  
+        imgs, seg = imgs.to(device), seg.to(device)  
         model.train()
         running_loss = 0
 
         pdet, pseg = model(imgs)
-        lane = lane.squeeze(dim=2)
-        loss = loss_fn(pseg, torch.stack(lane, drivable, axis=1))
+        
+        loss = loss_fn(pseg, seg.float())
 
         optimizer.zero_grad()
         loss.backward()
@@ -95,6 +93,7 @@ def main():
 
         writer.flush()
     
+    print(pseg.shape)
 
 if __name__ == '__main__':
     main()

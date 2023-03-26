@@ -1,4 +1,6 @@
 import os
+import cv2
+import numpy as np
 
 import pandas as pd
 
@@ -120,13 +122,17 @@ class BDD100k(data.DataLoader):
         #Lane Mask
         lane_path = self.root + 'labels/lane/masks/train/' if self.train else self.root + 'labels/lane/masks/val/'
         lane_name = os.path.splitext(target['name'])[0] + '.png'
+        lane_path2 = lane_path + lane_name
+
         lane_mask = read_image(lane_path + lane_name)
+        
 
         #Binary
         if self.transform:
             lane_mask = self.transform(lane_mask)
         lane_mask[lane_mask == 255.] = 1
         lane_mask = torch.where((lane_mask==0)|(lane_mask==1), lane_mask^1, lane_mask)
+
         #--------------------------------------------------------------------------------------------------------------------
         # Multi Class
         mask_image = torch.where(lane_mask != 255, 1, 0)
@@ -147,6 +153,7 @@ class BDD100k(data.DataLoader):
         #Drivable Area
         drive_path = self.root + 'labels/drivable/masks/train/' if self.train else self.root + 'labels/drivable/masks/val/'
         drive_name = os.path.splitext(target['name'])[0] + '.png'
+        drive_path2 = drive_path + drive_name
         drive_mask = read_image(drive_path + drive_name)
 
         if self.transform:
@@ -157,4 +164,29 @@ class BDD100k(data.DataLoader):
         drivable = torch.stack([drive_background, direct_mask, alternative_mask], dim= 0)
         #--------------------------------------------------------------------------------------------------------------------
 
-        return img / 255., label, lane.to(torch.float32), drivable.to(torch.float32)
+        seg = self._build_seg_target(lane_path2, drive_path2)
+        return img / 255., label, seg
+
+
+    def _build_seg_target(self, lane_path, drivable_path):
+        '''Build groundtruth for  segmentation
+        Note: This combines the lanes and drivable masks into one
+        Args:
+            lane_path (str): path to lane binary mask
+            drivable_path (str): path to drivable binary mask
+        '''
+        lane = cv2.imread(lane_path)[..., 0]
+        drivable = cv2.imread(drivable_path)[..., 0]
+        lanes = np.bitwise_and(lane, 0b111)
+        lane_mask, drivable_mask = [], []
+        for i in range(9):
+            lane_mask.append(np.where(lanes==i, 1, 0))
+            if i in range(3):
+                drivable_mask.append(np.where(drivable==i, 1, 0))
+        lane_mask, drivable_mask = np.stack(lane_mask), np.stack(drivable_mask)
+        lane_mask = torch.tensor(lane_mask)
+        drivable_mask = torch.tensor(drivable_mask)
+        if self.transform:
+            lane_mask, drivable_mask = self.transform(lane_mask), self.transform(drivable_mask)
+        mask = torch.cat((lane_mask, drivable_mask), axis=0)
+        return mask
