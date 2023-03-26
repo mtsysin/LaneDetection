@@ -1,2 +1,5 @@
 /runs/*
 /nohup.out
+/__pycache__/*
+/bdd100k/*
+bdd100k*

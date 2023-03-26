@@ -7,32 +7,21 @@ import torch.optim as optim
 import torch.utils.data as data
 from torch.utils.tensorboard import SummaryWriter
 
-<<<<<<< HEAD
-from model import YOLOP
-from bdd100k import BDD100k
-# from utils import non_max_supression, mean_average_precission, intersection_over_union
-# from loss import MultiLoss
-=======
 from model import YoloMulti
 from bdd100k import BDD100k
 #from utils import non_max_supression, mean_average_precission, intersection_over_union
-from loss import MultiLoss
+from loss import MultiLoss, SegmentationLoss, DetectionLoss
 
->>>>>>> master
 import matplotlib.pyplot as plt
 import tqdm
 
 from torch.utils.tensorboard import SummaryWriter
-writer = SummaryWriter('runs/prototype_lane');
+writer = SummaryWriter('runs/prototype_lane')
 
-<<<<<<< HEAD
 device = torch.device('cuda')
 print(torch.cuda.is_available())
-=======
 #os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-
 device = torch.cuda.set_device(1)
->>>>>>> master
 print(f"CUDA device: {torch.cuda.current_device()}")
 print(f"CUDA device count: {torch.cuda.device_count()}")
 
@@ -72,6 +61,7 @@ def main():
     )    
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20,40], gamma=0.1)
     loss_fn = MultiLoss()
+    loss_fn = SegmentationLoss()
 
     transform = transforms.Compose([
         transforms.Resize((384, 640), interpolation=transforms.InterpolationMode.NEAREST),
@@ -79,18 +69,14 @@ def main():
     ])
 
     #Load BDD100k Dataset
-<<<<<<< HEAD
     train_dataset = BDD100k(root=BDD_100K_ROOT, train=True, transform=transform, anchors=ANCHORS)
     # val_dataset = BDD100k(root='/home/pumetu/Purdue/LaneDetection/BDD100k/', train=False, transform=transform, anchors=ANCHORS)
-=======
-    train_dataset = BDD100k(root='/data/stevenwh/bdd100k/', train=True, transform=transform, anchors=ANCHORS)
-    val_dataset = BDD100k(root='/data/stevenwh/bdd100k/', train=False, transform=transform, anchors=ANCHORS)
->>>>>>> master
 
     train_loader = data.DataLoader(dataset=train_dataset, 
                                 batch_size=args.batch,
                                 num_workers=args.num_workers,
                                 shuffle=True)
+
     # val_loader = data.DataLoader(dataset=val_dataset, 
     #                             batch_size=args.batch,
     #                             num_workers=args.num_workers,
@@ -108,11 +94,7 @@ def main():
             imgs, seg = imgs.to(device), seg.to(device)  
             running_loss = 0
 
-<<<<<<< HEAD
             det_pred, seg_pred = model(imgs)
-=======
-            pdet, pseg = model(imgs)
->>>>>>> master
             lane = lane.squeeze(dim=2)
             loss = loss_fn(pdet, pseg, det, lane, drivable)
 
@@ -123,14 +105,11 @@ def main():
             running_loss += loss.item()
             writer.add_scalar("Loss/train", running_loss, epoch)
 
-
             inner_tqdm.update(1)
         outer_tqdm.upadte(1)
 
         writer.flush()
         scheduler.step()
-
-    
 
 if __name__ == '__main__':
     main()
