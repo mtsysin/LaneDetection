@@ -1,2 +1,3 @@
 /runs/*
 /nohup.out
+/__pycache__/*
