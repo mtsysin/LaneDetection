@@ -55,7 +55,7 @@ def main():
     transform = transforms.Compose([
         transforms.Resize((384, 640), interpolation=transforms.InterpolationMode.NEAREST),
     ])
-    #Load BDD100k Dataset
+    #Load BDD100k Dataset !
     train_dataset = BDD100k(root='/data/stevenwh/bdd100k/', train=True, transform=transform, anchors=ANCHORS)
     val_dataset = BDD100k(root='/data/stevenwh/bdd100k/', train=False, transform=transform, anchors=ANCHORS)
 
