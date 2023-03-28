@@ -142,3 +142,13 @@ class YoloMulti(nn.Module):
         det = self.det_head(n3, n4, n5)
 
         return (det, seg)
+
+# Verification
+if __name__ == "__main__":
+    from torchinfo import summary
+    import torch
+    device = torch.device('cuda')
+    BATCH = 16
+    model = YOLOP().to(device)
+    print(next(model.parameters()).device)
+    summary(model, input_size=(BATCH, 3, 416, 416))
