@@ -1,3 +1,4 @@
 /runs/*
-/nohup.out
+nohup.out
 /__pycache__/*
+*.pt

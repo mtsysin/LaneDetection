@@ -93,7 +93,16 @@ def main():
 
         writer.flush()
     
-    print(pseg.shape)
+    untransform = transforms.Compose([
+        transforms.Resize((720, 1280), interpolation=transforms.InterpolationMode.NEAREST),
+    ])
+    imgs = untransform(imgs)
+    seg = untransform(seg)
+    pseg = untransform(pseg)
+    torch.save(imgs, 'imgs.pt')
+    torch.save(seg, 'seg.pt')
+    torch.save(pseg, 'pseg.pt')
+
 
 if __name__ == '__main__':
     main()
