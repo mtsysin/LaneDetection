@@ -2,3 +2,6 @@
 nohup.out
 /__pycache__/*
 *.pt
+/bdd100k/*
+bdd100k*
+
