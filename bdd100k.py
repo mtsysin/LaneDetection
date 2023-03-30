@@ -12,6 +12,22 @@ from utils import DetectionUtils
 
 ANCHORS = [[(12,16),(19,36),(40,28)], [(36,75),(76,55),(72,146)], [(142,110),(192,243),(459,401)]]
 
+CLASS_DICT = {
+            'pedestrian' : 1,
+            'rider' : 2,
+            'car' : 3,
+            'truck' : 4, 
+            'bus' : 5, 
+            'train' : 6, 
+            'motorcycle' : 7,
+            'bicycle' : 8,
+            'traffic light' : 9,
+            'traffic sign' : 10,
+            'other vehicle': 11,
+            'trailer': 12,
+            'other person': 13,
+        }
+
 class BDD100k(data.DataLoader):
     '''
     Author: Pume Tuchinda
@@ -30,21 +46,8 @@ class BDD100k(data.DataLoader):
         self.detect = pd.read_json(self.root + 'labels/det_20/det_train.json') if train else pd.read_json(self.root + 'labels/det_20/det_val.json')
         self.detect.dropna(axis=0, subset=['labels'], inplace=True)
 
-        self.class_dict = {
-            'pedestrian' : 1,
-            'rider' : 2,
-            'car' : 3,
-            'truck' : 4, 
-            'bus' : 5, 
-            'train' : 6, 
-            'motorcycle' : 7,
-            'bicycle' : 8,
-            'traffic light' : 9,
-            'traffic sign' : 10,
-            'other vehicle': 11,
-            'trailer': 12,
-            'other person': 13,
-        }
+        self.class_dict = CLASS_DICT
+        
         self.S = S
         self.C = len(self.class_dict)
 
@@ -54,14 +57,14 @@ class BDD100k(data.DataLoader):
         self.n_anchors = self.anchors.shape[0]
         self.n_anchors_scale = self.n_anchors // 3
         self.ignore_iou_thresh = 0.5
-        self.utils = DetectionUtils()
         
     def __len__(self):
         return len(self.detect.index)
 
     def _iou_anchors(self, box, anchor):
         '''
-        IOU for anchors boxes
+        IOU for anchors boxes.
+        Assuming the two boxes have the same center.
         '''
         intersection = torch.min(box[...,0], anchor[...,0]) * torch.min(box[...,1], anchor[...,1])
         union = (box[...,0] * box[...,1] + anchor[...,0] * anchor[...,1]) - intersection
@@ -78,12 +81,16 @@ class BDD100k(data.DataLoader):
 
         if self.transform:
             img = self.transform(img)
+
         #--------------------------------------------------------------------------------------------------------------------
-        #Bounding Boxes
-        label = [torch.zeros(3, Sx, Sy, self.C + 5) for Sx, Sy in self.S]   
+        # Bounding Boxes
 
         annotations = target['labels']
         bboxes = []
+
+        anchors_scaled = [(w//width, h//height) for w, h in self.anchors] # Scale anchor boxes to find the best fit for each of the boxes in the image.
+
+        # Load imgae information (class and bounding box); convert bbox format (to x_c, y_c, w, h), keep them unscaled.
         for obj in annotations:
             obj_class = self.class_dict[obj['category']]
             bbox = list(obj['box2d'].values())
@@ -91,25 +98,33 @@ class BDD100k(data.DataLoader):
             box_tensor = torch.Tensor(([obj_class] + bbox.tolist()))
             bboxes.append(box_tensor) 
 
-        label = [torch.zeros(self.n_anchors_scale, Sy, Sx, self.C + 5) for Sy, Sx in self.S]
+        label = [torch.zeros(self.n_anchors_scale, Sy, Sx, self.C + 5) for Sy, Sx in self.S]  # array with n_anchors_scale (=3) tensors for each scale 
 
         for bbox in bboxes:
             obj_class, x, y, w, h = bbox.tolist()
-            x, w = x / width, w / width
+            x, w = x / width, w / width                                         # Normalizing by the whole image size
             y, h = y / height, h / height
             obj_class = int(obj_class)
-            anchors_iou = self._iou_anchors(bbox[..., 3:5], self.anchors)
-            anchor_idx = torch.argmax(anchors_iou, dim=0)
+            anchors_iou = self._iou_anchors(bbox[..., 3:5], anchors_scaled)     # !!!!!!! Changed self.anchors to hte scaled version
+            anchor_idx = torch.argmax(anchors_iou, dim=0)                       # Find anchor box index with highest IOU with predicted
+                                                                                # Calculated over a list of all anchors for all scales
             anchor_exist = [False] * 3
 
-            scale_idx = torch.div(anchor_idx, self.n_anchors_scale, rounding_mode='floor')
-            anchor = anchor_idx % self.n_anchors_scale
-            Sy, Sx = self.S[scale_idx]
-            i, j = int(Sy * y), int(Sx * x)
-            exist = label[scale_idx][anchor, i, j, self.C]
-            if not exist and not anchor_exist[scale_idx]: 
-                label[scale_idx][anchor, i, j, self.C] = 1
-                x_, y_ = Sx * x - j, Sy * y - i 
+            scale_idx = torch.div(anchor_idx, self.n_anchors_scale, rounding_mode='floor')      # Find a scale to which the chosen anchor belongs
+
+            anchor = anchor_idx % self.n_anchors_scale                                          # Find the index on the chosen anchor within its scale
+
+            Sy, Sx = self.S[scale_idx]                                                          # Get the output grid size for the chosen scale
+
+            i, j = int(Sy * y), int(Sx * x)                                                     # Find the indices of a cell to which the bbox center belongs
+                                                                                                # Remember, x and y here are already scaled by the total size of the image
+
+            exist = label[scale_idx][anchor, i, j, self.C]                                      # Check if we already have some object associated with this scale, anchor, and cell
+                                                                                                # Checking objectness score which has index self.C in our last-dimension vector
+
+            if not exist and not anchor_exist[scale_idx]:                                       # If there is nothing in this position
+                label[scale_idx][anchor, i, j, self.C] = 1                                      # Now, we put "1" in the objectness position
+                x_, y_ = Sx * x - j, Sy * y - i                                                 # Scale x, y, w, h to the size of the cell       
                 w_, h_ = Sx * w, Sy * h
                 bbox_ = torch.tensor([x_, y_, w_, h_])
                 label[scale_idx][anchor, i, j, self.C+1:self.C+5] = bbox_

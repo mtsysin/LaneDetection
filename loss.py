@@ -29,7 +29,6 @@ class MultiLoss(nn.Module):
         return self.alpha_det * det_loss + self.alpha_lane * lane_loss + self.alpha_lane * drive_loss
 
 
-
 class DetectionLoss(nn.Module):
     '''
     Author: William Stevens
@@ -69,7 +68,7 @@ class DetectionLoss(nn.Module):
         Returns:
             loss (tensor): loss value
         '''
-        ciou_loss = 0
+        ciou_loss, obj_loss, noobj_loss, class_loss = 0, 0, 0, 0
         for i, pred in enumerate(preds):
             target = targets[i].to(pred.device)
             Iobj = target[..., self.C] == 1
@@ -94,10 +93,10 @@ class DetectionLoss(nn.Module):
             #print(f'prediction: {pred[..., self.C+1:self.C+5][Iobj]}')
             #print(f' target: {target[..., self.C+1:self.C+5][Iobj]}')
 
-            obj_loss = self._focal_loss(pred[..., self.C:self.C+1][Iobj], target[..., self.C:self.C+1][Iobj])
-            noobj_loss = self._focal_loss(pred[..., self.C:self.C+1][Inoobj], target[..., self.C:self.C+1][Inoobj])
+            obj_loss += self._focal_loss(pred[..., self.C:self.C+1][Iobj], target[..., self.C:self.C+1][Iobj])
+            noobj_loss += self._focal_loss(pred[..., self.C:self.C+1][Inoobj], target[..., self.C:self.C+1][Inoobj])
 
-            class_loss = self._focal_loss(pred[..., :self.C][Iobj], target[..., :self.C][Iobj])
+            class_loss += self._focal_loss(pred[..., :self.C][Iobj], target[..., :self.C][Iobj])
 
         return self.alpha_box * ciou_loss + self.alpha_class * class_loss + self.alpha_obj * (obj_loss + noobj_loss)
     
