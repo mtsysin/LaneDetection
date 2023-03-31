@@ -1,7 +1,7 @@
 import os
 import cv2
 import numpy as np
-
+import matplotlib.pyplot as plt
 import pandas as pd
 
 import torch
@@ -11,7 +11,8 @@ from torchvision.io import read_image
 from utils import DetectionUtils
 
 ANCHORS = [[(12,16),(19,36),(40,28)], [(36,75),(76,55),(72,146)], [(142,110),(192,243),(459,401)]]
-
+GRID_SCALES = [(12, 20), (24, 40), (48, 80)]
+BDD_100K_ROOT = "bdd100k/"
 CLASS_DICT = {
             'pedestrian' : 1,
             'rider' : 2,
@@ -37,7 +38,7 @@ class BDD100k(data.DataLoader):
         - Drivable Area Mask
     '''
 
-    def __init__(self, root, train=True, transform=None, S=[(12, 20), (24, 40), (48, 80)], anchors=ANCHORS):
+    def __init__(self, root, train=True, transform=None, S=GRID_SCALES, anchors=ANCHORS):
         self.root = root 
         self.train = train
         self.transform = transform
@@ -57,6 +58,11 @@ class BDD100k(data.DataLoader):
         self.n_anchors = self.anchors.shape[0]
         self.n_anchors_scale = self.n_anchors // 3
         self.ignore_iou_thresh = 0.5
+
+        #Initialize paths:
+        self.img_path = self.root + 'images/100k/train/' if self.train else self.root + 'images/100k/val/'
+        self.lane_path = self.root + 'labels/lane/masks/train/' if self.train else self.root + 'labels/lane/masks/val/'
+
         
     def __len__(self):
         return len(self.detect.index)
@@ -74,8 +80,7 @@ class BDD100k(data.DataLoader):
     def __getitem__(self, index):
         target = self.detect.iloc[index]
 
-        img_path = self.root + 'images/100k/train/' if self.train else self.root + 'images/100k/val/'
-        img = read_image(img_path + target['name']) 
+        img = read_image(self.img_path + target['name']) 
         img = img.type(torch.float32)
         _, height, width = img.shape
 
@@ -88,9 +93,8 @@ class BDD100k(data.DataLoader):
         annotations = target['labels']
         bboxes = []
 
-        anchors_scaled = [(w//width, h//height) for w, h in self.anchors] # Scale anchor boxes to find the best fit for each of the boxes in the image.
 
-        # Load imgae information (class and bounding box); convert bbox format (to x_c, y_c, w, h), keep them unscaled.
+        # Load image information (class and bounding box); convert bbox format (to x_c, y_c, w, h), keep them unscaled.
         for obj in annotations:
             obj_class = self.class_dict[obj['category']]
             bbox = list(obj['box2d'].values())
@@ -105,8 +109,8 @@ class BDD100k(data.DataLoader):
             x, w = x / width, w / width                                         # Normalizing by the whole image size
             y, h = y / height, h / height
             obj_class = int(obj_class)
-            anchors_iou = self._iou_anchors(bbox[..., 3:5], anchors_scaled)     # !!!!!!! Changed self.anchors to hte scaled version
-            anchor_idx = torch.argmax(anchors_iou, dim=0)                       # Find anchor box index with highest IOU with predicted
+            anchors_iou = self._iou_anchors(bbox[..., 3:5], self.anchors)       # Calculate IOU between unscaled anchors and unscaled bbox
+            anchor_idx = torch.argmax(anchors_iou, dim=0)                       # Find anchor box index with highest IOU with the box
                                                                                 # Calculated over a list of all anchors for all scales
             anchor_exist = [False] * 3
 
@@ -135,16 +139,15 @@ class BDD100k(data.DataLoader):
 
         #--------------------------------------------------------------------------------------------------------------------
         #Lane Mask
-        lane_path = self.root + 'labels/lane/masks/train/' if self.train else self.root + 'labels/lane/masks/val/'
         lane_name = os.path.splitext(target['name'])[0] + '.png'
-        lane_path2 = lane_path + lane_name
+        lane_path2 = self.lane_path + lane_name
 
-        lane_mask = read_image(lane_path + lane_name)
+        lane_mask = read_image(self.lane_path + lane_name)
         
 
         #Binary
         if self.transform:
-            lane_mask = self.transform(lane_mask)
+            lane_mask = self.transform(lane_mask)                                               # Transform the lane mask in the same way we transform our image
         lane_mask[lane_mask == 255.] = 1
         lane_mask = torch.where((lane_mask==0)|(lane_mask==1), lane_mask^1, lane_mask)
 
@@ -180,7 +183,7 @@ class BDD100k(data.DataLoader):
         #--------------------------------------------------------------------------------------------------------------------
 
         seg = self._build_seg_target(lane_path2, drive_path2)
-        return img / 255., label, seg
+        return img, label, seg
 
 
     def _build_seg_target(self, lane_path, drivable_path):
@@ -205,3 +208,71 @@ class BDD100k(data.DataLoader):
             lane_mask, drivable_mask = self.transform(lane_mask), self.transform(drivable_mask)
         mask = torch.cat((lane_mask, drivable_mask), axis=0)
         return mask
+
+"""
+Dataset testing: get example outputs of the dataset
+Reverse-engineer the output of the dataset and get origianl images"
+"""
+if __name__ == "__main__":
+    
+    # Create dataset
+    dataset = BDD100k(
+        root = BDD_100K_ROOT
+    )
+
+    C = len(CLASS_DICT)
+    REVERSE_CLASS_DICT = {value: key for key, value in CLASS_DICT.items()}
+
+
+    # Generate sample outputs of the dataset
+    for _ in range(1):
+        # Get index from the dataset
+        idx = np.random.randint(0, len(dataset))
+        image, label, seg = dataset[idx]
+        _, img_size_y, img_size_x = image.size()
+
+        image = image.permute(1, 2, 0)
+        image = np.uint8(image)
+
+        print("Image size: ", image.shape)
+        print("Label size: ", [l.size() for l in label])
+        
+        for scale_idx, l in enumerate(label):
+
+            # Find indices and bboxes where there is an image on the current scale:
+            Iobj_i = l[..., C].bool()
+
+            selected_igms = l[Iobj_i]
+            selected_igms_positions = Iobj_i.nonzero(as_tuple=False)
+
+            print("Selected yolo vectors: ", selected_igms)
+            print("Selected yolo vectors positions: ", selected_igms_positions)
+
+            Sy, Sx = GRID_SCALES[scale_idx]                                                          # Get the output grid size for the chosen scale
+
+            # Show image and corresponding bounding boxes:
+            fig, ax = plt.subplots(1, 1)
+            for yolo_vector, position in zip(selected_igms, selected_igms_positions):
+                # get bbox values and convert them to scalars
+                x, y, w, h = yolo_vector[C+1:C+5].tolist()
+                class_vector = yolo_vector[:C].tolist()
+                class_index = class_vector.index(1.0)
+                anchor_idx, y_idx, x_idx = position.tolist()
+
+                # Select correct dimenstions
+                print("old", x, y, w, h, x_idx, img_size_x, Sx)
+                x = int((x + x_idx) * img_size_x / Sx)
+                y = int((y + y_idx) * img_size_y / Sy)
+                w = int(w * img_size_x / Sx)
+                h = int(h * img_size_y / Sy)
+
+                print("new", x, y, w, h)
+                # print(image)
+                image = cv2.rectangle(image, (int(x - w/2), int(y - h/2)), (int(x + w/2), int(y + h/2)), (36, 255, 12), 2) 
+                image = cv2.putText(image, REVERSE_CLASS_DICT[class_index], (int(x), int(y - 10)), cv2.FONT_HERSHEY_SIMPLEX , 0.8, (36, 255, 12), 2)
+
+
+        ax.imshow(image) 
+        ax.set_axis_off() 
+        plt.axis('tight') 
+        plt.savefig('out/pic.png')
