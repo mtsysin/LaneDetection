@@ -8,7 +8,7 @@ import torch.utils.data as data
 from torch.utils.tensorboard import SummaryWriter
 
 from model import YoloMulti
-from bdd100k import BDD100k
+from bdd100k import BDD100k, anchor_idx
 #from utils import non_max_supression, mean_average_precission, intersection_over_union
 from loss import MultiLoss, SegmentationLoss, DetectionLoss
 
@@ -31,8 +31,6 @@ Author: Pume Tuchinda
 
 BDD_100K_ROOT = ".bdd100k/"
 
-ANCHORS = [[(12,16),(19,36),(40,28)], [(36,75),(76,55),(72,146)], [(142,110),(192,243),(459,401)]]
-
 def parse_arg():
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', type=str, default="cuda", help='devise -- cuda or cpu')
@@ -49,7 +47,7 @@ def main():
     args = parse_arg()
 
     #Load model
-    model = YOLOP().to(device)
+    model = YoloMulti().to(device)
 
     model.train()
 

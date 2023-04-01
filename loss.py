@@ -1,16 +1,15 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from bdd100k import ANCHORS
 
 from evaluate import DetectionMetric
-
-ANCHORS = [[(12,16),(19,36),(40,28)], [(36,75),(76,55),(72,146)], [(142,110),(192,243),(459,401)]]
 
 class MultiLoss(nn.Module):
     '''
     Author: Pume Tuchinda
     Multi Task Loss Function
-        - Acts entirely as just a combination of the two losses for the two task we are doing
+        - Acts entirely as just a combination of the two losses for the two tasks we are doing
     '''
     def __init__(self, alpha_det=1, alpha_lane=1):
         super().__init__()
@@ -69,20 +68,20 @@ class DetectionLoss(nn.Module):
             loss (tensor): loss value
         '''
         ciou_loss, obj_loss, noobj_loss, class_loss = 0, 0, 0, 0
-        for i, pred in enumerate(preds):
+        for i, pred in enumerate(preds):                                                        # For each scale
             target = targets[i].to(pred.device)
             Iobj = target[..., self.C] == 1
             Inoobj = target[..., self.C] == 0
  
-            batch_size, n_anchors, gy, gx, n_outputs = pred.shape
-            gridy, gridx = torch.meshgrid([torch.arange(gy), torch.arange(gx)], indexing='ij')
-            anchor = torch.tensor(self.anchors[i]).view(1, 3, 1, 1, 2).to(pred.device)
+            # batch_size, n_anchors, gy, gx, n_outputs = pred.shape
+            # gridy, gridx = torch.meshgrid([torch.arange(gy), torch.arange(gx)], indexing='ij')
+            anchor = torch.tensor(self.anchors[i]).view(1, 3, 1, 1, 2).to(pred.device)          # Get the anchor boxes corresponding to the chosen scale, view: (Batch, anchor index, sy, sx, box dimension)
 
-            target[..., self.C+3:self.C+5] = torch.log(1e-6 + target[..., self.C+3:self.C+5] / anchor)
+            # In target, the bounding box x and y coordiantes and w and h are scaled by the size of the cell!!!!
+            # target[..., self.C+3:self.C+5] = torch.log(1e-6 + target[..., self.C+3:self.C+5] / anchor)
 
             pred[..., self.C+1:self.C+3] = pred[..., self.C+1:self.C+3].sigmoid()
-            #pred[..., self.C+3:self.C+5] = pred[..., self.C+3:self.C+5].exp() * anchor
-
+            pred[..., self.C+3:self.C+5] = pred[..., self.C+3:self.C+5].exp() * anchor
 
             print(pred.shape)
             print(target.shape)
@@ -95,7 +94,6 @@ class DetectionLoss(nn.Module):
 
             obj_loss += self._focal_loss(pred[..., self.C:self.C+1][Iobj], target[..., self.C:self.C+1][Iobj])
             noobj_loss += self._focal_loss(pred[..., self.C:self.C+1][Inoobj], target[..., self.C:self.C+1][Inoobj])
-
             class_loss += self._focal_loss(pred[..., :self.C][Iobj], target[..., :self.C][Iobj])
 
         return self.alpha_box * ciou_loss + self.alpha_class * class_loss + self.alpha_obj * (obj_loss + noobj_loss)
