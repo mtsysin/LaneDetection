@@ -4,3 +4,4 @@ nohup.out
 *.pt
 /bdd100k/*
 bdd100k*
+*.png
