@@ -1,5 +1,7 @@
 import torch
-from model import YoloMulti
+import sys
+sys.path.append('../yolov4')
+from model.model import YoloMulti
 
 x = torch.randn(2, 3, 416, 416)
 model = YoloMulti()

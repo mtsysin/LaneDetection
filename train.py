@@ -6,8 +6,10 @@ import torchvision.transforms as transforms
 import torch.optim as optim
 import torch.utils.data as data
 from torch.utils.tensorboard import SummaryWriter
+import sys
+sys.path.append('../yolov4')
 
-from model import YoloMulti
+from model.model import YoloMulti
 from bdd100k import BDD100k
 #from utils import non_max_supression, mean_average_precission, intersection_over_union
 from loss import MultiLoss, SegmentationLoss, DetectionLoss
@@ -94,9 +96,9 @@ def main():
         writer.flush()
     
 
-    torch.save(imgs, 'imgs.pt')
-    torch.save(seg, 'seg.pt')
-    torch.save(pseg, 'pseg.pt')
+    torch.save(imgs, 'out/imgs.pt')
+    torch.save(seg, 'out/seg.pt')
+    torch.save(pseg, 'out/pseg.pt')
 
 
 if __name__ == '__main__':

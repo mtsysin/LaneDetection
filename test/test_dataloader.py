@@ -4,6 +4,8 @@ import unittest
 import torchvision.transforms as transforms
 import torch.utils.data as data
 import time
+import sys
+sys.path.append('../yolov4')
 
 from bdd100k import BDD100k
 

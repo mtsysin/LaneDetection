@@ -9,8 +9,8 @@ Inspired by the official YOLOP, YOLOv4, and U-Net papers:
 import torch.nn as nn
 from typing import List
 
-from PANet import ConvBlock, PANet
-from CSPDarknet import CSPDarknet
+from model.PANet import ConvBlock, PANet
+from model.CSPDarknet import CSPDarknet
 
 class DetectionHead(nn.Module):
     '''
