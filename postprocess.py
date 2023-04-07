@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from utils import DetectionUtils
 from torchvision.utils import draw_bounding_boxes
-from bdd100k import ANCHORS, CLASS_DICT
+from bdd100k import ANCHORS, CLASS_DICT, REVERSE_CLASS_DICT
 from evaluate import DetectionMetric
 '''
 Author: Pume Tuchinda
@@ -10,7 +10,7 @@ Author: Pume Tuchinda
 
 detection_metric = DetectionMetric()
 
-def draw_bbox(img, dets):
+def draw_bbox_raw(img, dets):
     """
     Draws bboxes on an image. Accepts a single image with NO batch dimension present
     """
@@ -26,8 +26,7 @@ def draw_bbox(img, dets):
 
         return bbox
 
-    class_dict = CLASS_DICT
-    num_to_class = {i:s for s,i in class_dict.items()}
+    num_to_class = REVERSE_CLASS_DICT
 
     utils = DetectionUtils()
 
@@ -53,6 +52,25 @@ def draw_bbox(img, dets):
 
     return img
 
+def draw_bbox(imgs, dets):
+    """
+    Draws bboxes on a batch of images
+    Inout batch of images and batch of detected bboxes
+    """
+
+    num_to_class = REVERSE_CLASS_DICT
+
+    utils = DetectionUtils()
+
+    imgs = imgs.to(torch.uint8)
+
+    for i, (img, det) in enumerate(zip(imgs, dets)):
+        labels = [num_to_class[index.item()] for index in det[..., 0]]
+        bboxes = utils.xywh_to_xyxy(det[..., 2:])
+        imgs[i, ...] = draw_bounding_boxes(img, bboxes, width=3, labels=labels, colors=(100, 250, 150)) 
+
+    return imgs
+
 def nms(bboxes_batch, iou_threshold, conf_threshold):
     bboxes_batch_after_nms = []
     for bboxes in bboxes_batch:
@@ -70,31 +88,29 @@ def nms(bboxes_batch, iou_threshold, conf_threshold):
         while len(bboxes) > 0:                                                   # While we still have bboxes
             chosen_box = bboxes[0]
 
-            # bboxes = [
-            #     box for box in bboxes
-            #     if box[0] != chosen_box[0] or
-            #     detection_metric.box_iou(torch.tensor(chosen_box[2:]), torch.tensor(box[2:]), xyxy=False) < iou_threshold
-            # ]
-
             mask = detection_metric.box_iou(chosen_box[None ,2:], bboxes[... ,2:], xyxy=False).squeeze(-1) < iou_threshold
             bboxes = bboxes[mask]
 
             bboxes_after_nms.append(chosen_box)
 
+        bboxes_after_nms = torch.stack(bboxes_after_nms)
         bboxes_batch_after_nms.append(bboxes_after_nms)
 
     return bboxes_batch_after_nms
 
-def process_prediction(prediction, img_height, img_width, anchor, C=13):
+def process_prediction(prediction, img_height, img_width, anchor, C=13, true_prediction=True):
     """
     Takes a batch of predictions and converts them to a tensor of all bounding boxes with shape
     (batch, # of bounding boxes, 6 [class, confidence, x, y, w, h])
+    true_prediction -- helper parameter allowing to apply the processing function to already scaled predictions (for example can apply to true labels)
     """
     batch_size, n_anchors, gy, gx, n_outputs = prediction.shape                             # Get dimensions of prediction
     # prediction = prediction[0].clone().detach().cpu()                                       # Use predictions for the first batch
     gridy, gridx = torch.meshgrid([torch.arange(gy), torch.arange(gx)], indexing='ij')
-    prediction[..., C+1:C+3] = prediction[..., C+1:C+3].sigmoid()                           # Convert predictions to the format where everything is represented as a fraction of a cell size
-    prediction[..., C+3:C+5] = prediction[..., C+3:C+5].exp() * anchor
+
+    if true_prediction:
+        prediction[..., C+1:C+3] = prediction[..., C+1:C+3].sigmoid()                           # Convert predictions to the format where everything is represented as a fraction of a cell size
+        prediction[..., C+3:C+5] = prediction[..., C+3:C+5].exp() * anchor
 
     confidence = prediction[..., C].sigmoid()                                               # clamp the confidence between 0 and 1 so we can represent it as percentage
 
@@ -107,27 +123,18 @@ def process_prediction(prediction, img_height, img_width, anchor, C=13):
 
     return detection   
     
-def get_bboxes(predictions, iou_threshold, conf_threshold):
+def get_bboxes(predictions, iou_threshold, conf_threshold, true_prediction=True):
     """
     Takes predicted values (3 scales with each scale batched)
-    Outputs list of lists: for each batch output a list of acceptable bounding boxes
+    Outputs list of tensors: for each batch output a tensor of accepted bounding boxes
     """
     detections = []
-    for i, prediction in enumerate(predictions):                                        # For all prediction scales: i - number of scale, prediction - prediction for the corresponding scale
-        anchor = torch.tensor(ANCHORS[i]).view(1, 3, 1, 1, 2)                           # Get the anchor boxes corresponding to the chosen scale, view: (Batch, anchor index, sy, sx, box dimension)
-        detections.append(process_prediction(prediction, 384, 640, anchor, C=13))       # Process detection
+    for i, prediction in enumerate(predictions):                                                # For all prediction scales: i - number of scale, prediction - prediction for the corresponding scale
+        anchor = torch.tensor(ANCHORS[i]).view(1, 3, 1, 1, 2)                                   # Get the anchor boxes corresponding to the chosen scale, view: (Batch, anchor index, sy, sx, box dimension)
+        detections.append(process_prediction(prediction, 384, 640, anchor, true_prediction=true_prediction))    # Process detection
     detection = torch.cat(tuple(detections), dim=1)
     print(detection.shape)
     print(detection[1][2:7, ...])
     nms_b = nms(detection, iou_threshold, conf_threshold)                            # Perform non-maximum suppression on the resulting list of bounding boxes
 
     return nms_b
-
-if __name__=="__main__":
-    """Try to run this for sample prediction"""
-    pred1 = torch.rand(16, 3, 10, 20, 18)
-    pred2 = torch.rand(16, 3, 10, 20, 18)
-    pred3 = torch.rand(16, 3, 10, 20, 18)
-    pred = [pred1, pred2, pred3]
-
-    nms_b = get_bboxes(pred, 0.7, 0.7)

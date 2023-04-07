@@ -1,9 +1,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from bdd100k import ANCHORS
-
+from bdd100k import ANCHORS, GRID_SCALES, H, W
+import torchvision
 from evaluate import DetectionMetric
+from utils import DetectionUtils
+
+utils = DetectionUtils()
 
 class MultiLoss(nn.Module):
     '''
@@ -46,7 +49,7 @@ class DetectionLoss(nn.Module):
         alpha_box (float):  loss parameter for bounding box 
         alpha_obj (float): loss parameter for object score
     '''
-    def __init__(self, n_classes=13, alpha_class=1., alpha_box=1., alpha_obj=1., anchors=()):
+    def __init__(self, n_classes=13, alpha_class=1., alpha_box=1., alpha_obj=1., anchors=ANCHORS, grid_scales=GRID_SCALES, size=[H, W]):
         super().__init__()
         self.metric = DetectionMetric()
 
@@ -54,7 +57,16 @@ class DetectionLoss(nn.Module):
         self.alpha_class = alpha_class
         self.alpha_box = alpha_box
         self.alpha_obj = alpha_obj
-        self.anchors = ANCHORS
+
+        # Scale anchors to the grid size
+        self.anchors = torch.tensor(anchors)
+        self.grid_scales = torch.tensor(grid_scales)
+        self.size = torch.tensor(size)
+        cell_sizes = (self.size / self.grid_scales).repeat_interleave(3, dim=0).view(3, 3, 2)
+        # print(cell_sizes)
+        self.anchors = self.anchors / cell_sizes
+        # print("1231231231231232",self.anchors)
+        # self.anchors = [anchor for anchor, grid in zip(ANCHORS, GRID_SCALES)]
 
     def forward(self, preds, targets):
         '''
@@ -72,29 +84,42 @@ class DetectionLoss(nn.Module):
             target = targets[i].to(pred.device)
             Iobj = target[..., self.C] == 1
             Inoobj = target[..., self.C] == 0
+
  
             # batch_size, n_anchors, gy, gx, n_outputs = pred.shape
             # gridy, gridx = torch.meshgrid([torch.arange(gy), torch.arange(gx)], indexing='ij')
-            anchor = torch.tensor(self.anchors[i]).view(1, 3, 1, 1, 2).to(pred.device)          # Get the anchor boxes corresponding to the chosen scale, view: (Batch, anchor index, sy, sx, box dimension)
+            anchor = self.anchors[i].view(1, 3, 1, 1, 2).to(pred.device)          # Get the anchor boxes corresponding to the chosen scale, view: (Batch, anchor index, sy, sx, box dimension)
 
             # In target, the bounding box x and y coordiantes and w and h are scaled by the size of the cell!!!!
             # target[..., self.C+3:self.C+5] = torch.log(1e-6 + target[..., self.C+3:self.C+5] / anchor)
 
             pred[..., self.C+1:self.C+3] = pred[..., self.C+1:self.C+3].sigmoid()
-            pred[..., self.C+3:self.C+5] = pred[..., self.C+3:self.C+5].exp() * anchor
+            pred[..., self.C+3:self.C+5] = pred[..., self.C+3:self.C+5].exp() * anchor # !!! That might me VERRRYY wrong!!!!!
 
-            print(pred.shape)
-            print(target.shape)
+            # print("pred.shape", pred.shape)
+            # print("target.shape", target.shape)
+
+            # print("shape of OBJ part", pred[..., self.C+1:self.C+5][Iobj].shape)
+            # print("sample of OBJ part", pred[..., self.C+1:self.C+5][Iobj][:2])
+
 
             iou = self.metric.box_iou(pred[..., self.C+1:self.C+5][Iobj], target[..., self.C+1:self.C+5][Iobj], xyxy=False, CIoU=True).mean()
             ciou_loss += 1 - iou
 
+            # ciou_loss += torchvision.ops.complete_box_iou_loss(
+            #     utils.xywh_to_xyxy(pred[..., self.C+1:self.C+5][Iobj]), 
+            #     utils.xywh_to_xyxy(target[..., self.C+1:self.C+5][Iobj]), 
+            #     "mean"
+            # )
+
             #print(f'prediction: {pred[..., self.C+1:self.C+5][Iobj]}')
             #print(f' target: {target[..., self.C+1:self.C+5][Iobj]}')
 
-            obj_loss += self._focal_loss(pred[..., self.C:self.C+1][Iobj], target[..., self.C:self.C+1][Iobj])
-            noobj_loss += self._focal_loss(pred[..., self.C:self.C+1][Inoobj], target[..., self.C:self.C+1][Inoobj])
-            class_loss += self._focal_loss(pred[..., :self.C][Iobj], target[..., :self.C][Iobj])
+            # obj_loss += self._focal_loss(pred[..., self.C:self.C+1][Iobj], target[..., self.C:self.C+1][Iobj])
+            # noobj_loss += self._focal_loss(pred[..., self.C:self.C+1][Inoobj], target[..., self.C:self.C+1][Inoobj])
+            # class_loss += self._focal_loss(pred[..., :self.C][Iobj], target[..., :self.C][Iobj])
+        
+        # print(ciou_loss, obj_loss, noobj_loss, class_loss )
 
         return self.alpha_box * ciou_loss + self.alpha_class * class_loss + self.alpha_obj * (obj_loss + noobj_loss)
     

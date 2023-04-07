@@ -45,6 +45,3 @@ class LossTest(unittest.TestCase):
         print(loss(pred_batch.to(torch.float32), targets_batch.to(torch.float32)))
 
         assert(expected_loss == loss(pred_batch.to(torch.float32), targets_batch.to(torch.float32)))
-
-if __name__ == '__main__':
-    unittest.main()

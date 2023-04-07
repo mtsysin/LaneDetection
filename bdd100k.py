@@ -11,7 +11,9 @@ from torchvision.io import read_image
 from utils import DetectionUtils
 
 ANCHORS = [[(12,16),(19,36),(40,28)], [(36,75),(76,55),(72,146)], [(142,110),(192,243),(459,401)]]
-GRID_SCALES = [(12, 20), (24, 40), (48, 80)]
+# GRID_SCALES = [(12, 20), (24, 40), (48, 80)]
+GRID_SCALES = [(48, 80), (24, 40), (12, 20)]
+H, W = 720, 1280
 BDD_100K_ROOT = "bdd100k/"
 CLASS_DICT = {
             'pedestrian' : 1,
@@ -28,6 +30,7 @@ CLASS_DICT = {
             'trailer': 12,
             'other person': 13,
         }
+REVERSE_CLASS_DICT = {value: key for key, value in CLASS_DICT.items()}
 
 class BDD100k(data.DataLoader):
     '''
@@ -137,53 +140,54 @@ class BDD100k(data.DataLoader):
             elif not exist and anchors_iou[anchor_idx] > self.ignore_iou_thresh:
                 label[scale_idx][anchor, i, j, self.C] = -1
 
-        #--------------------------------------------------------------------------------------------------------------------
-        #Lane Mask
-        lane_name = os.path.splitext(target['name'])[0] + '.png'
-        lane_path2 = self.lane_path + lane_name
+        # #--------------------------------------------------------------------------------------------------------------------
+        # #Lane Mask
+        # lane_name = os.path.splitext(target['name'])[0] + '.png'
+        # lane_path2 = self.lane_path + lane_name
 
-        lane_mask = read_image(self.lane_path + lane_name)
+        # lane_mask = read_image(self.lane_path + lane_name)
         
 
-        #Binary
-        if self.transform:
-            lane_mask = self.transform(lane_mask)                                               # Transform the lane mask in the same way we transform our image
-        lane_mask[lane_mask == 255.] = 1
-        lane_mask = torch.where((lane_mask==0)|(lane_mask==1), lane_mask^1, lane_mask)
+        # #Binary
+        # if self.transform:
+        #     lane_mask = self.transform(lane_mask)                                               # Transform the lane mask in the same way we transform our image
+        # lane_mask[lane_mask == 255.] = 1
+        # lane_mask = torch.where((lane_mask==0)|(lane_mask==1), lane_mask^1, lane_mask)
 
-        #--------------------------------------------------------------------------------------------------------------------
-        # Multi Class
-        mask_image = torch.where(lane_mask != 255, 1, 0)
-        category_image = torch.bitwise_and(lane_mask, 0x7) * mask_image + (mask_image - 1)
-        crosswalk = (category_image == 0).to(torch.float32)
-        double_other = (category_image == 1).to(torch.float32)
-        double_white = (category_image == 2).to(torch.float32)
-        double_yellow = (category_image == 3).to(torch.float32)
-        road_curb = (category_image == 4).to(torch.float32)
-        single_other = (category_image == 5).to(torch.float32)
-        single_white = (category_image == 6).to(torch.float32)
-        single_yellow = (category_image == 7).to(torch.float32)
-        lane_background = (category_image == 8).to(torch.float32)
-        lane = torch.stack([lane_background, single_yellow, single_white, single_other, road_curb,double_yellow, double_white, double_other, crosswalk], dim=0)
+        # #--------------------------------------------------------------------------------------------------------------------
+        # # Multi Class
+        # mask_image = torch.where(lane_mask != 255, 1, 0)
+        # category_image = torch.bitwise_and(lane_mask, 0x7) * mask_image + (mask_image - 1)
+        # crosswalk = (category_image == 0).to(torch.float32)
+        # double_other = (category_image == 1).to(torch.float32)
+        # double_white = (category_image == 2).to(torch.float32)
+        # double_yellow = (category_image == 3).to(torch.float32)
+        # road_curb = (category_image == 4).to(torch.float32)
+        # single_other = (category_image == 5).to(torch.float32)
+        # single_white = (category_image == 6).to(torch.float32)
+        # single_yellow = (category_image == 7).to(torch.float32)
+        # lane_background = (category_image == 8).to(torch.float32)
+        # lane = torch.stack([lane_background, single_yellow, single_white, single_other, road_curb,double_yellow, double_white, double_other, crosswalk], dim=0)
+        # # #--------------------------------------------------------------------------------------------------------------------
+
+        # #--------------------------------------------------------------------------------------------------------------------
+        # #Drivable Area
+        # drive_path = self.root + 'labels/drivable/masks/train/' if self.train else self.root + 'labels/drivable/masks/val/'
+        # drive_name = os.path.splitext(target['name'])[0] + '.png'
+        # drive_path2 = drive_path + drive_name
+        # drive_mask = read_image(drive_path + drive_name)
+
+        # if self.transform:
+        #     drive_mask = self.transform(drive_mask)[0]
+        # direct_mask = torch.where(drive_mask == 0, 1, 0)
+        # alternative_mask = torch.where(drive_mask == 1, 1, 0)
+        # drive_background = torch.where(drive_mask == 2, 1, 0)
+        # drivable = torch.stack([drive_background, direct_mask, alternative_mask], dim= 0)
         # #--------------------------------------------------------------------------------------------------------------------
 
-        #--------------------------------------------------------------------------------------------------------------------
-        #Drivable Area
-        drive_path = self.root + 'labels/drivable/masks/train/' if self.train else self.root + 'labels/drivable/masks/val/'
-        drive_name = os.path.splitext(target['name'])[0] + '.png'
-        drive_path2 = drive_path + drive_name
-        drive_mask = read_image(drive_path + drive_name)
+        # seg = self._build_seg_target(lane_path2, drive_path2)
 
-        if self.transform:
-            drive_mask = self.transform(drive_mask)[0]
-        direct_mask = torch.where(drive_mask == 0, 1, 0)
-        alternative_mask = torch.where(drive_mask == 1, 1, 0)
-        drive_background = torch.where(drive_mask == 2, 1, 0)
-        drivable = torch.stack([drive_background, direct_mask, alternative_mask], dim= 0)
-        #--------------------------------------------------------------------------------------------------------------------
-
-        seg = self._build_seg_target(lane_path2, drive_path2)
-        return img, label, seg
+        return img, label, 4
 
 
     def _build_seg_target(self, lane_path, drivable_path):
@@ -208,71 +212,3 @@ class BDD100k(data.DataLoader):
             lane_mask, drivable_mask = self.transform(lane_mask), self.transform(drivable_mask)
         mask = torch.cat((lane_mask, drivable_mask), axis=0)
         return mask
-
-"""
-Dataset testing: get example outputs of the dataset
-Reverse-engineer the output of the dataset and get origianl images"
-"""
-if __name__ == "__main__":
-    
-    # Create dataset
-    dataset = BDD100k(
-        root = BDD_100K_ROOT
-    )
-
-    C = len(CLASS_DICT)
-    REVERSE_CLASS_DICT = {value: key for key, value in CLASS_DICT.items()}
-
-
-    # Generate sample outputs of the dataset
-    for _ in range(1):
-        # Get index from the dataset
-        idx = np.random.randint(0, len(dataset))
-        image, label, seg = dataset[idx]
-        _, img_size_y, img_size_x = image.size()
-
-        image = image.permute(1, 2, 0)
-        image = np.uint8(image)
-
-        print("Image size: ", image.shape)
-        print("Label size: ", [l.size() for l in label])
-        
-        for scale_idx, l in enumerate(label):
-
-            # Find indices and bboxes where there is an image on the current scale:
-            Iobj_i = l[..., C].bool()
-
-            selected_igms = l[Iobj_i]
-            selected_igms_positions = Iobj_i.nonzero(as_tuple=False)
-
-            print("Selected yolo vectors: ", selected_igms)
-            print("Selected yolo vectors positions: ", selected_igms_positions)
-
-            Sy, Sx = GRID_SCALES[scale_idx]                                                          # Get the output grid size for the chosen scale
-
-            # Show image and corresponding bounding boxes:
-            fig, ax = plt.subplots(1, 1)
-            for yolo_vector, position in zip(selected_igms, selected_igms_positions):
-                # get bbox values and convert them to scalars
-                x, y, w, h = yolo_vector[C+1:C+5].tolist()
-                class_vector = yolo_vector[:C].tolist()
-                class_index = class_vector.index(1.0)
-                anchor_idx, y_idx, x_idx = position.tolist()
-
-                # Select correct dimenstions
-                print("old", x, y, w, h, x_idx, img_size_x, Sx)
-                x = int((x + x_idx) * img_size_x / Sx)
-                y = int((y + y_idx) * img_size_y / Sy)
-                w = int(w * img_size_x / Sx)
-                h = int(h * img_size_y / Sy)
-
-                print("new", x, y, w, h)
-                # print(image)
-                image = cv2.rectangle(image, (int(x - w/2), int(y - h/2)), (int(x + w/2), int(y + h/2)), (36, 255, 12), 2) 
-                image = cv2.putText(image, REVERSE_CLASS_DICT[class_index], (int(x), int(y - 10)), cv2.FONT_HERSHEY_SIMPLEX , 0.8, (36, 255, 12), 2)
-
-
-        ax.imshow(image) 
-        ax.set_axis_off() 
-        plt.axis('tight') 
-        plt.savefig('out/pic.png')

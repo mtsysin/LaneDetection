@@ -9,7 +9,7 @@ Inspired by the Path Aggregation Network mentioned in the YOLOv4 paper and desig
 import torch
 import torch.nn as nn
 
-from CSPDarknet import ConvBlock, CSPBlock
+from .CSPDarknet import ConvBlock, CSPBlock
 
 class PANet(nn.Module):
     '''
