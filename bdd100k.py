@@ -16,19 +16,19 @@ GRID_SCALES = [(48, 80), (24, 40), (12, 20)]
 H, W = 720, 1280
 BDD_100K_ROOT = "bdd100k/"
 CLASS_DICT = {
-            'pedestrian' : 1,
-            'rider' : 2,
-            'car' : 3,
-            'truck' : 4, 
-            'bus' : 5, 
-            'train' : 6, 
-            'motorcycle' : 7,
-            'bicycle' : 8,
-            'traffic light' : 9,
-            'traffic sign' : 10,
-            'other vehicle': 11,
-            'trailer': 12,
-            'other person': 13,
+            'pedestrian' :      0,
+            'rider' :           1,
+            'car' :             2,
+            'truck' :           3, 
+            'bus' :             4, 
+            'train' :           5, 
+            'motorcycle' :      6,
+            'bicycle' :         7,
+            'traffic light' :   8,
+            'traffic sign' :    9,
+            'other vehicle':    10,
+            'trailer':          11,
+            'other person':     12,
         }
 REVERSE_CLASS_DICT = {value: key for key, value in CLASS_DICT.items()}
 

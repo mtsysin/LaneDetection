@@ -63,10 +63,12 @@ class DetectionLoss(nn.Module):
         self.grid_scales = torch.tensor(grid_scales)
         self.size = torch.tensor(size)
         cell_sizes = (self.size / self.grid_scales).repeat_interleave(3, dim=0).view(3, 3, 2)
-        # print(cell_sizes)
+        # print(cell_sizes)  
         self.anchors = self.anchors / cell_sizes
         # print("1231231231231232",self.anchors)
-        # self.anchors = [anchor for anchor, grid in zip(ANCHORS, GRID_SCALES)]
+
+        self.loss = nn.MSELoss()
+        self.loss2 = nn.BCEWithLogitsLoss()
 
     def forward(self, preds, targets):
         '''
@@ -88,13 +90,14 @@ class DetectionLoss(nn.Module):
  
             # batch_size, n_anchors, gy, gx, n_outputs = pred.shape
             # gridy, gridx = torch.meshgrid([torch.arange(gy), torch.arange(gx)], indexing='ij')
-            anchor = self.anchors[i].view(1, 3, 1, 1, 2).to(pred.device)          # Get the anchor boxes corresponding to the chosen scale, view: (Batch, anchor index, sy, sx, box dimension)
+            with torch.no_grad():    
+                anchor = self.anchors[i].view(1, 3, 1, 1, 2).to(pred.device)          # Get the anchor boxes corresponding to the chosen scale, view: (Batch, anchor index, sy, sx, box dimension)
 
             # In target, the bounding box x and y coordiantes and w and h are scaled by the size of the cell!!!!
             # target[..., self.C+3:self.C+5] = torch.log(1e-6 + target[..., self.C+3:self.C+5] / anchor)
 
-            pred[..., self.C+1:self.C+3] = pred[..., self.C+1:self.C+3].sigmoid()
-            pred[..., self.C+3:self.C+5] = pred[..., self.C+3:self.C+5].exp() * anchor # !!! That might me VERRRYY wrong!!!!!
+            # pred[..., self.C+1:self.C+3] = pred[..., self.C+1:self.C+3].sigmoid()
+            # pred[..., self.C+3:self.C+5] = pred[..., self.C+3:self.C+5].exp() * anchor # !!! That might me VERRRYY wrong!!!!!
 
             # print("pred.shape", pred.shape)
             # print("target.shape", target.shape)
@@ -103,8 +106,9 @@ class DetectionLoss(nn.Module):
             # print("sample of OBJ part", pred[..., self.C+1:self.C+5][Iobj][:2])
 
 
-            iou = self.metric.box_iou(pred[..., self.C+1:self.C+5][Iobj], target[..., self.C+1:self.C+5][Iobj], xyxy=False, CIoU=True).mean()
-            ciou_loss += 1 - iou
+            # iou = self.metric.box_iou(pred[..., self.C+1:self.C+5][Iobj], target[..., self.C+1:self.C+5][Iobj], xyxy=False, CIoU=True).mean()
+            # print(1 - iou)
+            # ciou_loss += 1 - iou
 
             # ciou_loss += torchvision.ops.complete_box_iou_loss(
             #     utils.xywh_to_xyxy(pred[..., self.C+1:self.C+5][Iobj]), 
@@ -112,14 +116,20 @@ class DetectionLoss(nn.Module):
             #     "mean"
             # )
 
-            #print(f'prediction: {pred[..., self.C+1:self.C+5][Iobj]}')
-            #print(f' target: {target[..., self.C+1:self.C+5][Iobj]}')
+            # ciou_loss += self.loss(pred[..., self.C+1:self.C+5][Iobj], target[..., self.C+1:self.C+5][Iobj])
+
+            # print(f'prediction: {pred[..., self.C+1:self.C+5][Iobj][0]}')
+            # print(f' target: {target[..., self.C+1:self.C+5][Iobj][0]}')
+
+            obj_loss += self._focal_loss(pred[..., self.C:self.C+1], target[..., self.C:self.C+1])
+
 
             # obj_loss += self._focal_loss(pred[..., self.C:self.C+1][Iobj], target[..., self.C:self.C+1][Iobj])
             # noobj_loss += self._focal_loss(pred[..., self.C:self.C+1][Inoobj], target[..., self.C:self.C+1][Inoobj])
             # class_loss += self._focal_loss(pred[..., :self.C][Iobj], target[..., :self.C][Iobj])
-        
-        # print(ciou_loss, obj_loss, noobj_loss, class_loss )
+
+
+        print(ciou_loss, obj_loss, noobj_loss, class_loss )
 
         return self.alpha_box * ciou_loss + self.alpha_class * class_loss + self.alpha_obj * (obj_loss + noobj_loss)
     
@@ -137,7 +147,7 @@ class DetectionLoss(nn.Module):
             loss emphasis on difficult learning tasks that result in misclassification.
         '''
         p = torch.sigmoid(preds)
-        ce_loss = F.binary_cross_entropy_with_logits(preds, targets, reduction='mean')
+        ce_loss = F.binary_cross_entropy_with_logits(preds, targets, reduction='none')
         p_t = p * targets + (1 - p) * (1 - targets)
         loss = ce_loss * ((1 - p_t) ** gamma)
 

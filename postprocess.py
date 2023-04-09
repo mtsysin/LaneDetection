@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from utils import DetectionUtils
 from torchvision.utils import draw_bounding_boxes
-from bdd100k import ANCHORS, CLASS_DICT, REVERSE_CLASS_DICT
+from bdd100k import ANCHORS, CLASS_DICT, REVERSE_CLASS_DICT, W, H, GRID_SCALES
 from evaluate import DetectionMetric
 '''
 Author: Pume Tuchinda
@@ -128,9 +128,19 @@ def get_bboxes(predictions, iou_threshold, conf_threshold, true_prediction=True)
     Takes predicted values (3 scales with each scale batched)
     Outputs list of tensors: for each batch output a tensor of accepted bounding boxes
     """
+    # Prepare anchors:
+    if true_prediction:
+        anchors = torch.tensor(ANCHORS)
+        grid_scales = torch.tensor(GRID_SCALES)
+        size = torch.tensor([H, W])
+        cell_sizes = (size / grid_scales).repeat_interleave(3, dim=0).view(3, 3, 2)
+        anchors = anchors / cell_sizes
+    else:
+        anchors = ANCHORS
+
     detections = []
     for i, prediction in enumerate(predictions):                                                # For all prediction scales: i - number of scale, prediction - prediction for the corresponding scale
-        anchor = torch.tensor(ANCHORS[i]).view(1, 3, 1, 1, 2)                                   # Get the anchor boxes corresponding to the chosen scale, view: (Batch, anchor index, sy, sx, box dimension)
+        anchor = torch.tensor(anchors[i]).view(1, 3, 1, 1, 2)                                   # Get the anchor boxes corresponding to the chosen scale, view: (Batch, anchor index, sy, sx, box dimension)
         detections.append(process_prediction(prediction, 384, 640, anchor, true_prediction=true_prediction))    # Process detection
     detection = torch.cat(tuple(detections), dim=1)
     print(detection.shape)

@@ -79,7 +79,7 @@ class CSPBlock(nn.Module):
         self.part1_conv1 = ConvBlock(in_channels, in_channels//2, filter_size=1)
         self.part2_conv1 = ConvBlock(in_channels, in_channels//2, filter_size=1)
 
-        self.bottleneck = nn.Sequential(*[ResBlock(in_channels//2, in_channels//2) for _ in range(repeats)])
+        self.bottleneck = nn.Sequential(*[ResBlock(in_channels//2, in_channels//4) for _ in range(repeats)])
 
         self.part2_conv2 = ConvBlock(in_channels, out_channels, filter_size=1)
 

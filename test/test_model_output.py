@@ -1,12 +1,13 @@
 import torch
 from model.YoloMulti import YoloMulti
+from model.CSPDarknet import CSPDarknet
 import unittest
 from torchinfo import summary
 
 class TestModel(unittest.TestCase):
     def test_model_ouptut(self):
         torch.cuda.empty_cache()
-        device = torch.device('cuda:1')
+        device = torch.device('cuda')
         BATCH = 8
         # print(torch.cuda.memory_summary(device=None, abbreviated=False))
         model = YoloMulti().to(device)
