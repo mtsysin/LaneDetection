@@ -1,12 +1,15 @@
 import argparse
 
 import os
+import numpy as np
 import torch
 import torchvision.transforms as transforms
 import torch.optim as optim
 import torch.utils.data as data
 from torch.utils.tensorboard import SummaryWriter
 import sys
+import CutMix
+import concurrent.futures
 sys.path.append('../yolov4')
 
 from model.model import YoloMulti
@@ -42,7 +45,8 @@ def parse_arg():
     parser.add_argument('--cp', '-checkpoint', type=str, default='', help='path to checpoint of pretrained model')
     return parser.parse_args()
 
-def main():
+def main(alpha, cutmix_percentage):
+    cutmix = CutMix(image_width=640, image_height=384, num_classes=len(train_dataset.classes), alpha=alpha)
     args = parse_arg()
 
     #Load model
@@ -78,6 +82,22 @@ def main():
         #Train
         
         #for imgs, det, lane, drivable in train_loader:
+        for imgs, det, seg in train_loader:
+            # Iterate over all images in the batch
+            for i in range(imgs.size(0)):
+                # Apply CutMix only with the given probability
+                if np.random.rand() < cutmix_percentage:
+                    # Get a random index from the current batch, different from the current index
+                    index2 = torch.randint(0, imgs.size(0) - 1, (1,))
+                    if index2 >= i:
+                        index2 += 1
+                    index2 = index2.item()
+                    # Apply CutMix to the selected images and labels
+                    cutmix_img, cutmix_label = cutmix.get_cutmix(imgs[i], imgs[index2], det[i], det[index2])
+                    # Replace the original images and labels with the CutMix-augmented versions
+                    imgs[i] = cutmix_img
+                    det[i] = cutmix_label
+
         imgs, seg = imgs.to(device), seg.to(device)  
         model.train()
         running_loss = 0
@@ -99,7 +119,32 @@ def main():
     torch.save(imgs, 'out/imgs.pt')
     torch.save(seg, 'out/seg.pt')
     torch.save(pseg, 'out/pseg.pt')
+    return running_loss, alpha, cutmix
 
 
 if __name__ == '__main__':
-    main()
+    alpha_values = [0.1, 0.3, 0.5, 0.7, 0.9, 1.0]  
+    cutmix_percentages = [0.1, 0.3, 0.5, 0.7, 0.9]  
+    best_alpha = None
+    best_cutmix_percentage = None
+    best_loss = float('inf')
+
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        futures = []
+        
+        for alpha in alpha_values:
+            for cutmix_percentage in cutmix_percentages:
+                futures.append(executor.submit(main, alpha, cutmix_percentage))
+
+        for future in concurrent.futures.as_completed(futures):
+            loss, alpha, cutmix_percentage = future.result()
+            if loss < best_loss:
+                best_alpha = alpha
+                best_cutmix_percentage = cutmix_percentage
+                best_loss = loss
+
+    print("Best alpha:", best_alpha)
+    print("Best CutMix percentage:", best_cutmix_percentage)
+
+    print("Best alpha:", best_alpha)
+    print("Best CutMix percentage:", best_cutmix_percentage)

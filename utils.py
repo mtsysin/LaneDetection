@@ -36,3 +36,35 @@ class DetectionUtils:
         bbox_[:, 3] = (bbox[:, 1] + bbox[:, 3] / 2)
 
         return bbox_
+    
+    def resize_nearest(image, width, height):
+        """
+        Resizes an image using nearest-neighbor interpolation.
+        Args:
+            image: The image to be resized using nearest-neighbor interpolation.
+            width: The desired width of the resized image.
+            height: The desired height of the resized image.
+        Returns:
+            new_image: A new image that has been resized to the specified width and height using nearest-neighbor interpolation.
+        """
+        # Create a new blank image of the desired size
+        new_image = Image.new("RGB", (width, height))
+        
+        # Calculate the scaling factors for width and height
+        scale_x = image.width / width
+        scale_y = image.height / height
+        
+        # Loop over every pixel in the new image
+        for x in range(width):
+            for y in range(height):
+                # Calculate the corresponding pixel in the original image
+                px = int(x * scale_x)
+                py = int(y * scale_y)
+                
+                # Get the RGB color of the pixel in the original image
+                color = image.getpixel((px, py))
+                
+                # Set the pixel color in the new image
+                new_image.putpixel((x, y), color)
+        
+        return new_image
