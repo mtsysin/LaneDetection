@@ -8,10 +8,25 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
+from train import BDD_100K_ROOT
+
 from bdd100k import *
 
 
 class TestBDD100k(unittest.TestCase):
+    def test_transform(self):
+        img = read_image(BDD_100K_ROOT + 'images/100k/train/' + "730585a8-d57b052f.jpg") 
+        img = img.type(torch.float32)
+
+        print(1, img)
+        img = transforms.Resize((384, 640), interpolation=transforms.InterpolationMode.NEAREST)(img)
+        print(2, img)
+        img = img/255
+        img = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(img)
+        print(3, img)
+
+        pass
+
     def test_single_process_dataloader(self):
         train_dataset = BDD100k(root=BDD_100K_ROOT, train=True)
         self._check_dataloader(train_dataset, num_workers=0)     
@@ -75,7 +90,8 @@ class TestBDD100k(unittest.TestCase):
         # Generate sample outputs of the dataset
         for _ in range(1):
             # Get index from the dataset
-            idx = np.random.randint(0, len(dataset))
+            # idx = np.random.randint(0, len(dataset))
+            idx = 0
             image, label, seg = dataset[idx]
             _, img_size_y, img_size_x = image.size()
 
@@ -86,6 +102,7 @@ class TestBDD100k(unittest.TestCase):
             print("Label size: ", [l.size() for l in label])
             
             for scale_idx, l in enumerate(label):
+                print(f"###########\nSCALE {scale_idx}\n###########")
 
                 # Find indices and bboxes where there is an image on the current scale:
                 Iobj_i = l[..., C].bool()
@@ -123,7 +140,7 @@ class TestBDD100k(unittest.TestCase):
             ax.imshow(image) 
             ax.set_axis_off() 
             plt.axis('tight') 
-            plt.savefig('out/pic.png')
+            plt.savefig('out/test_dataset_scaling_and_reversion.png')
 
 
     def _check_dataloader(self, data, num_workers):

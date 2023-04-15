@@ -36,3 +36,9 @@ class DetectionUtils:
         bbox_[:, 3] = (bbox[:, 1] + bbox[:, 3] / 2)
 
         return bbox_
+    
+class Reduce_255():
+    def __init__(self) -> None:
+        pass
+    def __call__(self, img):
+        return img/255.

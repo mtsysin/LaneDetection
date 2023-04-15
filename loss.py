@@ -63,9 +63,7 @@ class DetectionLoss(nn.Module):
         self.grid_scales = torch.tensor(grid_scales)
         self.size = torch.tensor(size)
         cell_sizes = (self.size / self.grid_scales).repeat_interleave(3, dim=0).view(3, 3, 2)
-        # print(cell_sizes)  
         self.anchors = self.anchors / cell_sizes
-        # print("1231231231231232",self.anchors)
 
         self.loss = nn.MSELoss()
         self.loss2 = nn.BCEWithLogitsLoss()
@@ -84,10 +82,10 @@ class DetectionLoss(nn.Module):
         ciou_loss, obj_loss, noobj_loss, class_loss = 0, 0, 0, 0
         for i, pred in enumerate(preds):                                                        # For each scale
             target = targets[i].to(pred.device)
-            Iobj = target[..., self.C] == 1
-            Inoobj = target[..., self.C] == 0
 
- 
+            Iobj = target[..., self.C] == 1
+            Inoobj = Iobj == 0
+
             # batch_size, n_anchors, gy, gx, n_outputs = pred.shape
             # gridy, gridx = torch.meshgrid([torch.arange(gy), torch.arange(gx)], indexing='ij')
             with torch.no_grad():    
@@ -96,8 +94,8 @@ class DetectionLoss(nn.Module):
             # In target, the bounding box x and y coordiantes and w and h are scaled by the size of the cell!!!!
             # target[..., self.C+3:self.C+5] = torch.log(1e-6 + target[..., self.C+3:self.C+5] / anchor)
 
-            # pred[..., self.C+1:self.C+3] = pred[..., self.C+1:self.C+3].sigmoid()
-            # pred[..., self.C+3:self.C+5] = pred[..., self.C+3:self.C+5].exp() * anchor # !!! That might me VERRRYY wrong!!!!!
+            pred[..., self.C+1:self.C+3] = pred[..., self.C+1:self.C+3].sigmoid()
+            pred[..., self.C+3:self.C+5] = pred[..., self.C+3:self.C+5].exp() * anchor
 
             # print("pred.shape", pred.shape)
             # print("target.shape", target.shape)
@@ -106,34 +104,24 @@ class DetectionLoss(nn.Module):
             # print("sample of OBJ part", pred[..., self.C+1:self.C+5][Iobj][:2])
 
 
-            # iou = self.metric.box_iou(pred[..., self.C+1:self.C+5][Iobj], target[..., self.C+1:self.C+5][Iobj], xyxy=False, CIoU=True).mean()
-            # print(1 - iou)
-            # ciou_loss += 1 - iou
-
-            # ciou_loss += torchvision.ops.complete_box_iou_loss(
-            #     utils.xywh_to_xyxy(pred[..., self.C+1:self.C+5][Iobj]), 
-            #     utils.xywh_to_xyxy(target[..., self.C+1:self.C+5][Iobj]), 
-            #     "mean"
-            # )
-
+            iou = self.metric.box_iou(pred[..., self.C+1:self.C+5][Iobj], target[..., self.C+1:self.C+5][Iobj], xyxy=False, CIoU=True).mean()
+            ciou_loss += 1 - iou
             # ciou_loss += self.loss(pred[..., self.C+1:self.C+5][Iobj], target[..., self.C+1:self.C+5][Iobj])
 
-            # print(f'prediction: {pred[..., self.C+1:self.C+5][Iobj][0]}')
-            # print(f' target: {target[..., self.C+1:self.C+5][Iobj][0]}')
+            # print('prediction:' ,pred[..., self.C+1:self.C+5][Iobj])
+            # print('target: ', target[..., self.C+1:self.C+5][Iobj])
 
-            obj_loss += self._focal_loss(pred[..., self.C:self.C+1], target[..., self.C:self.C+1])
+            # obj_loss += self._focal_loss(pred[..., self.C:self.C+1], target[..., self.C:self.C+1])
 
+            obj_loss += self._focal_loss(pred[..., self.C:self.C+1][Iobj], target[..., self.C:self.C+1][Iobj])
+            noobj_loss += self._focal_loss(pred[..., self.C:self.C+1][Inoobj], target[..., self.C:self.C+1][Inoobj])
+            class_loss += self._focal_loss(pred[..., :self.C][Iobj], target[..., :self.C][Iobj])
 
-            # obj_loss += self._focal_loss(pred[..., self.C:self.C+1][Iobj], target[..., self.C:self.C+1][Iobj])
-            # noobj_loss += self._focal_loss(pred[..., self.C:self.C+1][Inoobj], target[..., self.C:self.C+1][Inoobj])
-            # class_loss += self._focal_loss(pred[..., :self.C][Iobj], target[..., :self.C][Iobj])
-
-
-        print(ciou_loss, obj_loss, noobj_loss, class_loss )
+        print(ciou_loss, obj_loss, noobj_loss, class_loss)
 
         return self.alpha_box * ciou_loss + self.alpha_class * class_loss + self.alpha_obj * (obj_loss + noobj_loss)
     
-    def _focal_loss(self, preds, targets, alpha=0.25, gamma=2):
+    def _focal_loss(self, preds, targets, alpha=0.25, gamma=2, reduction="mean"):
         '''
         Focal Loss Implementation
         Author: William Stevens
@@ -155,7 +143,10 @@ class DetectionLoss(nn.Module):
             alpha_t = alpha * targets + (1 - alpha) * (1 - targets)
             loss *= alpha_t 
 
-        return loss.mean() 
+        if reduction == "mean":
+            return loss.mean() 
+        else:
+            return loss.sum() 
 
 class SegmentationLoss(nn.Module):
     '''

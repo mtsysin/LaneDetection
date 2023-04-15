@@ -12,9 +12,11 @@ from torch.distributed import init_process_group, destroy_process_group
 from torch.utils.tensorboard import SummaryWriter
 
 from model.YoloMulti import YoloMulti
+from model.DumbNet import DumbNet
 from bdd100k import BDD100k, ANCHORS, BDD_100K_ROOT
 #from utils import non_max_supression, mean_average_precission, intersection_over_union
 from loss import MultiLoss, SegmentationLoss, DetectionLoss
+from utils import Reduce_255
 
 import matplotlib.pyplot as plt
 import tqdm
@@ -22,6 +24,8 @@ import tqdm
 from torch.utils.tensorboard import SummaryWriter
 writer = SummaryWriter('runs/prototype_lane')
 
+
+torch.cuda.empty_cache()
 device = torch.device('cuda')
 print(torch.cuda.is_available()) 
 print(f"CUDA device: {torch.cuda.current_device()}")
@@ -33,12 +37,20 @@ Author: Pume Tuchinda
 
 LOSS_COUNT = 1
 ROOT = "."
-USE_DDP = False
-USE_PARALLEL = True
+USE_DDP = False             # deosn't work currently
+USE_PARALLEL = False
+
+INPUT_IMG_TRANSFORM = transforms.Compose([
+        transforms.Resize((384, 640), interpolation=transforms.InterpolationMode.NEAREST),
+        Reduce_255(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
 
 SHUFFLE_OFF = True
 
 gpu_id = None
+
+MODEL = YoloMulti
 
 def ddp_setup(rank: int, world_size: int):
     """
@@ -53,15 +65,24 @@ def ddp_setup(rank: int, world_size: int):
 def parse_arg():
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', type=str, default="cuda", help='devise -- cuda or cpu')
-    parser.add_argument('--batch', type=int, default=24, help='batch size')
-    parser.add_argument('--epochs', type=int, default=10, help='number of training epochs')
+    parser.add_argument('--batch', type=int, default=1, help='batch size')
+    parser.add_argument('--epochs', type=int, default=1000, help='number of training epochs')
     parser.add_argument('--num_workers', type=int, default=2, help='number of workers')
     parser.add_argument('--root', type=str, default=BDD_100K_ROOT, help='root directory for both image and labels')
     parser.add_argument('--cp', '-checkpoint', type=str, default='', help='path to checpoint of pretrained model')
-    parser.add_argument('--sched_points', nargs='+', type=int, default=[250, 400], help='sheduler milestones list')
+    parser.add_argument('--sched_points', nargs='+', type=int, default=[250, 400, 1000, 2000], help='sheduler milestones list')
     parser.add_argument('--sched_gamma', type=int, default=0.1, help='gamma for learning rate scheduler')
     parser.add_argument('--save', type=bool, default=True, help='save model flag')
     return parser.parse_args()
+
+# Initialize weights:
+def weights_init(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv2d') != -1:
+        torch.nn.init.normal_(m.weight.data, 0.0, 1)
+    elif classname.find('BatchNorm') != -1:
+        torch.nn.init.normal_(m.weight.data, 1.0, 0.5)
+        torch.nn.init.constant_(m.bias.data, 0)
 
 def main():
 
@@ -72,41 +93,45 @@ def main():
 
     #Load model
     if USE_DDP:
-        model = YoloMulti()
+        model = MODEL()
         model = DDP(model, device_ids=[gpu_id])
     elif USE_PARALLEL:
-        model = YoloMulti().to(device)
+        model = MODEL()
         model= torch.nn.DataParallel(model)
         model.to(device)
     else:
-        model = YoloMulti().to(device)
+        model = MODEL().to(device)
         print(device)
 
-    # model = DDP(model, )
-    # print("start:::::", next(model.parameters()).device)
-
+    # model.apply(weights_init)
     model.train()
 
     #Set optimizer, loss function, and learning rate scheduler
     optimizer = torch.optim.Adam(
         model.parameters(), 
-        lr=2e-4, 
+        lr=1e-4, 
         betas=(0.9, 0.99)
-    )    
+    )
+    # optimizer = torch.optim.SGD(
+    #     model.parameters(),
+    #     lr=0.001,   
+    # )
 
-    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.0001, max_lr=0.1, cycle_momentum=False)
-    # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=args.sched_points, gamma=args.sched_gamma)
+    SCHED_STEP = "no"
+    # SCHED_STEP = "batch"
+    # SCHED_STEP = "epoch"
+    if SCHED_STEP != "no":
+        "Scheduler is ON"
+        scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.00001, max_lr=0.01, cycle_momentum=False, step_size_up=100)
+        # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=args.sched_points, gamma=args.sched_gamma)
     # loss_fn = MultiLoss()
     loss_fn = DetectionLoss()
 
-    transform = transforms.Compose([
-        transforms.Resize((384, 640), interpolation=transforms.InterpolationMode.NEAREST),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-    ])
+    transform = INPUT_IMG_TRANSFORM
 
     #Load BDD100k Dataset
     train_dataset = BDD100k(root=BDD_100K_ROOT, train=True, transform=transform, anchors=ANCHORS)
-    indices = [i for i in range (5000)]
+    indices = [i for i in range (1)]
     train_dataset = data.Subset(train_dataset, indices)
 
     # val_dataset = BDD100k(root='/home/pumetu/Purdue/LaneDetection/BDD100k/', train=False, transform=transform, anchors=ANCHORS)
@@ -140,6 +165,7 @@ def main():
         for i, (imgs, det, seg) in enumerate(train_loader):
 
             imgs, seg = imgs.to(device), seg.to(device)         # Select correct device for training
+            det = [d.to(device) for d in det]
 
             det_pred, _ = model(imgs)
 
@@ -153,7 +179,7 @@ def main():
             optimizer.step()
             
             running_loss += loss.item()
-            writer.add_scalar("Loss/train", running_loss, epoch)
+            # writer.add_scalar("Loss/train", running_loss, epoch)
 
             if (i+1) % LOSS_COUNT == 0:
                 file_log.set_description_str(
@@ -163,11 +189,15 @@ def main():
                 running_loss = 0.0
 
             inner_tqdm.update(1)
-            # scheduler.step()            # Use for cyclic scheduler
+
+            if SCHED_STEP == "batch":
+                scheduler.step()
 
         outer_tqdm.update(1)
-        writer.flush()
-        scheduler.step()
+        # writer.flush()
+
+        if SCHED_STEP == "epoch":
+            scheduler.step()
 
     if args.save:
         torch.save(model.state_dict(), ROOT+'/model.pt')
@@ -193,27 +223,3 @@ if __name__ == '__main__':
     plt.xlabel(f'Processed batches * {LOSS_COUNT}')
     plt.legend()
     plt.savefig("./out/loss_trace.png")
-
-
-'''
-1231231231231232 tensor([[15., 16.],
-        [30., 32.],
-        [60., 64.]])
-
-run
-1231231231231232 tensor([[[0.8000, 1.0000],
-         [0.6333, 1.1250],
-         [0.6667, 0.4375]],
-
-        [[2.4000, 4.6875],
-         [2.5333, 1.7188],
-         [1.2000, 2.2812]],
-
-        [[9.4667, 6.8750],
-         [6.4000, 7.5938],
-         [7.6500, 6.2656]]])
-
-ANCHORS = [[(12,16),(19,36),(40,28)], [(36,75),(76,55),(72,146)], [(142,110),(192,243),(459,401)]]
-# GRID_SCALES = [(12, 20), (24, 40), (48, 80)]
-GRID_SCALES = [(48, 80), (24, 40), (12, 20)]
-'''

@@ -16,9 +16,11 @@ class Mish(torch.nn.Module):
         - Obtain parent class's information, functions, and fields using super().__init__() of nn.Module
         '''
         super(Mish, self).__init__()
+        self.relu = nn.LeakyReLU(0.1)
 
     def forward(self, x):
         return x * torch.tanh(torch.nn.functional.softplus(x))
+        # return self.relu(x)
 
 class ConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, filter_size=3, stride=1):
@@ -44,7 +46,7 @@ class ConvBlock(nn.Module):
         return x
 
 class ResBlock(nn.Module):
-    def __init__(self, in_ch, out_ch):
+    def __init__(self, in_ch, intermediate_ch):
         '''
         Author: William Stevens
         Initialize ResBlock object
@@ -55,8 +57,8 @@ class ResBlock(nn.Module):
             conv3x3 (tuple): 
         '''
         super().__init__()
-        self.firstConvBlock = ConvBlock(in_ch, out_ch, filter_size=1)
-        self.secondConvBlock = ConvBlock(out_ch, in_ch, filter_size=3)
+        self.firstConvBlock = ConvBlock(in_ch, intermediate_ch, filter_size=1)
+        self.secondConvBlock = ConvBlock(intermediate_ch, in_ch, filter_size=3)
 
     def forward(self, x):
         '''
@@ -76,12 +78,9 @@ class CSPBlock(nn.Module):
         - Define variables and function calls using the object initialization parameters
         '''
         super(CSPBlock, self).__init__()
-        self.part1_conv1 = ConvBlock(in_channels, in_channels//2, filter_size=1)
-        self.part2_conv1 = ConvBlock(in_channels, in_channels//2, filter_size=1)
 
         self.bottleneck = nn.Sequential(*[ResBlock(in_channels//2, in_channels//4) for _ in range(repeats)])
-
-        self.part2_conv2 = ConvBlock(in_channels, out_channels, filter_size=1)
+        self.transition = ConvBlock(in_channels, out_channels, filter_size=1)
 
     def forward(self, x):
         '''
@@ -89,12 +88,11 @@ class CSPBlock(nn.Module):
         - Use function calls defined in object initialization to carry out desired forward pass
         - For each convolution, save the output to be procedurally concatenated with subsequent input layers
         '''
-        part1 = self.part1_conv1(x)
-        part2 = self.part2_conv1(x)
+        # Split the input tensor in two parts
+        part1, part2 = x.chunk(2, dim=1)
         part2 = self.bottleneck(part2)
         concat = torch.cat((part1, part2), dim=1)
-
-        return self.part2_conv2(concat)
+        return self.transition(concat)
 
 class CSPDarknet(nn.Module):
     def __init__(self, in_channels=3, out_channels=32):

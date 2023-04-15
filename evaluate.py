@@ -57,6 +57,11 @@ class DetectionMetric:
         Returns:
             
         """
+        # print("pred ", box1)
+        # print("target ", box2)
+
+        EPS = 1e-6
+
         if xyxy:
             box1_x1 = box1[..., 0:1]
             box1_y1 = box1[..., 1:2]
@@ -85,7 +90,7 @@ class DetectionMetric:
         box1_width, box1_height = box1_x2 - box1_x1, box1_y2 - box1_y1
         box2_width, box2_height = box2_x2 - box2_x1, box2_y2 - box2_y1
         union = box1_width * box1_height + box2_width * box2_height - intersection
-        iou = intersection / (union + 1e-6)
+        iou = intersection / (union + EPS)
 
         if CIoU:
             '''
@@ -101,13 +106,13 @@ class DetectionMetric:
             convex_height = torch.max(box1_y2, box2_y2) - torch.min(box1_y1, box2_y1)
             convex_diag_sq = convex_width**2 + convex_height**2
             center_dist_sq = (box2_x1 + box2_x2 - box1_x1 - box1_x2)**2 + (box2_y1 + box2_y2 - box1_y1 - box1_y2)**2
-            dist_penalty = center_dist_sq / convex_diag_sq
+            dist_penalty = center_dist_sq / (convex_diag_sq + EPS) / 4 
 
-            v = (4 / math.pi**2) * torch.pow(torch.atan(box2_width / box2_height) - torch.atan(box1_width / box1_height), 2)
+            v = (4 / (torch.pi**2)) * torch.pow(torch.atan(box2_width / (box2_height + EPS)) - torch.atan(box1_width / (box1_height + EPS)), 2)
             with torch.no_grad():
-                alpha = v / ((1 + 1e-6) - iou + v)
+                alpha = v / ((1 + EPS) - iou + v)
             aspect_ratio_penalty = alpha * v
             
-            return iou - dist_penalty + aspect_ratio_penalty
+            return iou - dist_penalty - aspect_ratio_penalty
         
         return iou

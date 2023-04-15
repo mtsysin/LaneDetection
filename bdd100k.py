@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-
+from PIL import Image
 import torch
 import torch.utils.data as data
 from torchvision.io import read_image
@@ -31,6 +31,7 @@ CLASS_DICT = {
             'other person':     12,
         }
 REVERSE_CLASS_DICT = {value: key for key, value in CLASS_DICT.items()}
+THRESH = 10
 
 class BDD100k(data.DataLoader):
     '''
@@ -84,6 +85,8 @@ class BDD100k(data.DataLoader):
         target = self.detect.iloc[index]
 
         img = read_image(self.img_path + target['name']) 
+        # img = Image.open(self.img_path + target['name'])
+
         img = img.type(torch.float32)
         _, height, width = img.shape
 
@@ -102,8 +105,9 @@ class BDD100k(data.DataLoader):
             obj_class = self.class_dict[obj['category']]
             bbox = list(obj['box2d'].values())
             bbox = self.utils.xyxy_to_xywh(bbox) 
-            box_tensor = torch.Tensor(([obj_class] + bbox.tolist()))
-            bboxes.append(box_tensor) 
+            if bbox[2] >= THRESH and bbox[3] >= THRESH:
+                box_tensor = torch.Tensor(([obj_class] + bbox.tolist()))
+                bboxes.append(box_tensor) 
 
         label = [torch.zeros(self.n_anchors_scale, Sy, Sx, self.C + 5) for Sy, Sx in self.S]  # array with n_anchors_scale (=3) tensors for each scale 
 
