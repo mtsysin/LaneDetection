@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import tqdm
 
 from torch.utils.tensorboard import SummaryWriter
-writer = SummaryWriter('runs/prototype_lane');
+writer = SummaryWriter('runs/prototype_lane')
 
 device = torch.cuda.set_device(1)
 print(f"CUDA device: {torch.cuda.current_device()}")
@@ -41,7 +41,7 @@ def parse_arg():
     parser.add_argument('--epoch', type=int, default=100, help='epochs')
     parser.add_argument('--num_workers', type=int, default=12, help='number of workers')
     # Fix root below
-    parser.add_argument('--root', type=str, default='/data/stevenwh/bdd100k/', help='root directory for both image and labels')
+    parser.add_argument('--root', type=str, default='/data/li4583/bdd100k/', help='root directory for both image and labels')
     parser.add_argument('--cp', '-checkpoint', type=str, default='', help='path to checpoint of pretrained model')
     return parser.parse_args()
 
@@ -62,8 +62,8 @@ def main(alpha, cutmix_percentage):
         transforms.Resize((384, 640), interpolation=transforms.InterpolationMode.NEAREST),
     ])
     #Load BDD100k Dataset
-    train_dataset = BDD100k(root='/data/stevenwh/bdd100k/', train=True, transform=transform, anchors=ANCHORS)
-    val_dataset = BDD100k(root='/data/stevenwh/bdd100k/', train=False, transform=transform, anchors=ANCHORS)
+    train_dataset = BDD100k(root='/data/li4583/bdd100k/', train=True, transform=transform, anchors=ANCHORS)
+    val_dataset = BDD100k(root='/data/li4583/bdd100k/', train=False, transform=transform, anchors=ANCHORS)
 
     train_loader = data.DataLoader(dataset=train_dataset, 
                                 batch_size=args.batch,
