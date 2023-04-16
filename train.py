@@ -83,20 +83,24 @@ def main(alpha, cutmix_percentage):
         
         #for imgs, det, lane, drivable in train_loader:
         for imgs, det, seg in train_loader:
-            # Iterate over all images in the batch
-            for i in range(imgs.size(0)):
-                # Apply CutMix only with the given probability
-                if np.random.rand() < cutmix_percentage:
-                    # Get a random index from the current batch, different from the current index
-                    index2 = torch.randint(0, imgs.size(0) - 1, (1,))
-                    if index2 >= i:
-                        index2 += 1
-                    index2 = index2.item()
-                    # Apply CutMix to the selected images and labels
-                    cutmix_img, cutmix_label = cutmix.get_cutmix(imgs[i], imgs[index2], det[i], det[index2])
-                    # Replace the original images and labels with the CutMix-augmented versions
-                    imgs[i] = cutmix_img
-                    det[i] = cutmix_label
+                try:
+                    # Iterate over all images in the batch
+                    for i in range(imgs.size(0)):
+                        # Apply CutMix only with the given probability
+                        if np.random.rand() < cutmix_percentage:
+                            # Get a random index from the current batch, different from the current index
+                            index2 = torch.randint(0, imgs.size(0) - 1, (1,))
+                            if index2 >= i:
+                                index2 += 1
+                            index2 = index2.item()
+                            # Apply CutMix to the selected images and labels
+                            cutmix_img, cutmix_label = cutmix.get_cutmix(imgs[i], imgs[index2], det[i], det[index2])
+                            # Replace the original images and labels with the CutMix-augmented versions
+                            imgs[i] = cutmix_img
+                            det[i] = cutmix_label
+                except IndexError as e:
+                    print(f"IndexError: {e}. batch size={imgs.size(0)}, index2={index2}, i={i}")
+                    raise e
 
         imgs, seg = imgs.to(device), seg.to(device)  
         model.train()
