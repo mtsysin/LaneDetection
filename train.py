@@ -46,7 +46,6 @@ def parse_arg():
     return parser.parse_args()
 
 def main(alpha, cutmix_percentage):
-    cutmix = CutMix(image_width=640, image_height=384, num_classes=len(train_dataset.classes), alpha=alpha)
     args = parse_arg()
 
     #Load model
@@ -64,6 +63,7 @@ def main(alpha, cutmix_percentage):
     #Load BDD100k Dataset
     train_dataset = BDD100k(root='/data/li4583/bdd100k/', train=True, transform=transform, anchors=ANCHORS)
     val_dataset = BDD100k(root='/data/li4583/bdd100k/', train=False, transform=transform, anchors=ANCHORS)
+    cutmix = CutMix(image_width=640, image_height=384, num_classes=len(train_dataset.classes), alpha=alpha)
 
     train_loader = data.DataLoader(dataset=train_dataset, 
                                 batch_size=args.batch,
