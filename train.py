@@ -8,7 +8,7 @@ import torch.optim as optim
 import torch.utils.data as data
 from torch.utils.tensorboard import SummaryWriter
 import sys
-import CutMix
+from CutMix import CutMix
 import concurrent.futures
 sys.path.append('../yolov4')
 
