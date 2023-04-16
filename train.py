@@ -128,6 +128,28 @@ if __name__ == '__main__':
     best_alpha = None
     best_cutmix_percentage = None
     best_loss = float('inf')
+    for alpha in alpha_values:
+        for cutmix_percentage in cutmix_percentages:
+            loss, alpha, cutmix_percentage = main(alpha, cutmix_percentage)
+            if loss < best_loss:
+                best_alpha = alpha
+                best_cutmix_percentage = cutmix_percentage
+                best_loss = loss
+
+    print("Best alpha:", best_alpha)
+    print("Best CutMix percentage:", best_cutmix_percentage)
+
+    print("Best alpha:", best_alpha)
+    print("Best CutMix percentage:", best_cutmix_percentage)
+    
+    
+    
+    
+    """    alpha_values = [0.1, 0.3, 0.5, 0.7, 0.9, 1.0]  
+    cutmix_percentages = [0.1, 0.3, 0.5, 0.7, 0.9]  
+    best_alpha = None
+    best_cutmix_percentage = None
+    best_loss = float('inf')
 
     with concurrent.futures.ProcessPoolExecutor() as executor:
         futures = []
@@ -147,4 +169,4 @@ if __name__ == '__main__':
     print("Best CutMix percentage:", best_cutmix_percentage)
 
     print("Best alpha:", best_alpha)
-    print("Best CutMix percentage:", best_cutmix_percentage)
+    print("Best CutMix percentage:", best_cutmix_percentage)"""
