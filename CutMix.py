@@ -25,11 +25,10 @@ class CutMix():
         self.c = num_classes
         self.a = alpha
 
-    def hadamard(m, x):
+    def hadamard(self, m, x):
         # Element-wise product of two tensors
         return m * x
 
-    
     def get_cutmix(self, im1, im2, lab1, lab2):
         '''
         Obtain CutMix result of two input training images and their labels.
