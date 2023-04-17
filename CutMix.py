@@ -45,8 +45,8 @@ class CutMix():
 
 
         # Initialize m tensor and patch tensor as full of ones, shape W x H
-        m = torch.ones((self.w, self.h, im1.size(2))).long()  # convert to long type
-        patch = torch.ones((self.w, self.h, im1.size(2))).long()  # convert to long type
+        m = torch.ones((self.w, self.h)).long()  # convert to long type
+        patch = torch.ones((self.w, self.h)).long()  # convert to long type
 
         # Compute lambda from uniform distribution (same as beta distribution Beta(alpha, alpha))
         # Will get value in between 0 and 1
@@ -64,10 +64,10 @@ class CutMix():
 
         # Fill patch tensor with zeros outside of the patch bounding box computed above
         # Bitwise XOR with original mask M to get patch mask
-        patch[0:self.w,0:Py,:] = 0
-        patch[0:self.w,Py+Ph:self.h,:] = 0
-        patch[0:Px,Py:Py+Ph,:] = 0
-        patch[Px:Px+Pw,Py:Py+Ph,:] = 0
+        patch[0:self.w,0:Py] = 0
+        patch[0:self.w,Py+Ph:self.h] = 0
+        patch[0:Px,Py:Py+Ph] = 0
+        patch[Px:Px+Pw,Py:Py+Ph] = 0
         m = torch.bitwise_xor(m, patch)
 
         # Compute new cutmix training image by using hadamard product of m and im1, plus 1-m hadamard im2
