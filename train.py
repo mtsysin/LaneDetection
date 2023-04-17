@@ -74,8 +74,8 @@ def main(alpha, cutmix_percentage):
                                 num_workers=args.num_workers,
                                 shuffle=False)
                   
-    imgs, det, seg = next(iter(train_loader)) # First batch
-    model.train()
+    #imgs, det, seg = next(iter(train_loader)) # First batch
+    #model.train()
 
     for epoch in tqdm.tqdm(range(args.epoch)):
         #--------------------------------------------------------------------------------------
