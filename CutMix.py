@@ -26,9 +26,7 @@ class CutMix():
         self.a = alpha
 
     def hadamard(self, m, x):
-        # Element-wise product of two tensors
-        if m.shape[-1] != x.shape[-1]:
-            raise ValueError("m and x must have the same number of channels.")
+        # Element-wise product of two tensor
         return m * x
 
     def get_cutmix(self, im1, im2, lab1, lab2):
@@ -66,10 +64,10 @@ class CutMix():
 
         # Fill patch tensor with zeros outside of the patch bounding box computed above
         # Bitwise XOR with original mask M to get patch mask
-        patch[0:self.w,0:Py] = 0
-        patch[0:self.w,Py+Ph:self.h] = 0
-        patch[0:Px,Py:Py+Ph] = 0
-        patch[Px:Px+Pw,Py:Py+Ph] = 0
+        patch[0:self.w,0:Py,:] = 0
+        patch[0:self.w,Py+Ph:self.h,:] = 0
+        patch[0:Px,Py:Py+Ph,:] = 0
+        patch[Px:Px+Pw,Py:Py+Ph,:] = 0
         m = torch.bitwise_xor(m, patch)
 
         # Compute new cutmix training image by using hadamard product of m and im1, plus 1-m hadamard im2
