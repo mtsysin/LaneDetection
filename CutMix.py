@@ -6,6 +6,7 @@ Inspired by the official CutMix paper (https://arxiv.org/pdf/1905.04899.pdf)
 
 import torch
 import numpy as np
+from torch.distributions.beta import Beta
 
 class CutMix():
     def __init__(self, image_width, image_height, num_classes, alpha=1):
