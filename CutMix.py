@@ -46,8 +46,8 @@ class CutMix():
         '''
 
         # Initialize m tensor and patch tensor as full of ones, shape W x H
-        m = torch.ones((self.w, self.h))
-        patch = torch.ones((self.w, self.h))
+        m = torch.ones((self.w, self.h)).long()  # convert to long type
+        patch = torch.ones((self.w, self.h)).long()  # convert to long type
 
         # Compute lambda from uniform distribution (same as beta distribution Beta(alpha, alpha))
         # Will get value in between 0 and 1
