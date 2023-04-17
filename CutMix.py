@@ -41,6 +41,9 @@ class CutMix():
         - lab (Tensor): label for new training image after CutMix, shape W x H x C
         '''
 
+        # Resize the second image to match the first image size
+        im2_resized = F.interpolate(im2.unsqueeze(0), size=(self.image_height, self.image_width), mode='bilinear', align_corners=False).squeeze(0)
+
         # Sample the combination ratio lambda from Beta distribution
         lam = Beta(self.alpha, self.alpha).sample().item()
 
@@ -55,11 +58,10 @@ class CutMix():
         mask[:, bb_y:bb_y + bb_height, bb_x:bb_x + bb_width] = 1
 
         # Perform cutmix
-        im = im1 * (1 - mask) + im2 * mask
+        im = im1 * (1 - mask) + im2_resized * mask
 
         # Create the new label after cutmix
         lab = lab1 * torch.tensor(lam) + lab2 * torch.tensor(1 - lam)
-
 
         return im, lab
 
