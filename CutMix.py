@@ -49,8 +49,8 @@ class CutMix():
         lam = Beta(self.alpha, self.alpha).sample().item()
 
         # Calculate the bounding box size and position for cutmix
-        bb_width = int(torch.sqrt(1 - torch.tensor(lam)) * self.image_width)
-        bb_height = int(torch.sqrt(1 - torch.tensor(lam)) * self.image_height)
+        bb_width = max(1, int(torch.sqrt(1 - torch.tensor(lam)) * self.image_width))
+        bb_height = max(1, int(torch.sqrt(1 - torch.tensor(lam)) * self.image_height))
         bb_x = torch.randint(0, self.image_width - bb_width, (1,)).item()
         bb_y = torch.randint(0, self.image_height - bb_height, (1,)).item()
 
