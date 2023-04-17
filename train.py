@@ -89,7 +89,7 @@ def main(alpha, cutmix_percentage):
                         # Apply CutMix only with the given probability
                         if np.random.rand() < cutmix_percentage:
                             # Get a random index from the current batch, different from the current index
-                            index2 = torch.randint(0, imgs.size(0) - 2, (1,))
+                            index2 = torch.randint(1, imgs.size(0) - 2, (1,))
                             if index2 >= i:
                                 index2 += 1
                             index2 = index2.item()
