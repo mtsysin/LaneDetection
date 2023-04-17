@@ -25,10 +25,9 @@ class CutMix():
         self.c = num_classes
         self.a = alpha
 
-        self.hadamard = torch.ones((self.h, self.w, self.c))
-        mask = torch.rand((self.h, self.w, self.c))
-        self.hadamard = torch.mul(mask, self.hadamard)
-
+    def hadamard(m, x):
+        # Element-wise product of two tensors
+        return m * x
 
     
     def get_cutmix(self, im1, im2, lab1, lab2):
