@@ -101,7 +101,6 @@ def main(alpha, cutmix_percentage):
                             
                 except IndexError as e:
                     print(f"IndexError: {e}. batch size={imgs.size(0)}, index2={index2}, i={i}")
-                    raise e
 
         imgs, seg = imgs.to(device), seg.to(device)  
         model.train()
