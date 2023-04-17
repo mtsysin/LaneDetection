@@ -42,8 +42,7 @@ class CutMix():
         - im (Tensor): new training image after CutMix, shape W x H x C
         - lab (Tensor): label for new training image after CutMix, shape W x H x C
         '''
-        im1 = resize(im1, (w, h))
-        im2 = resize(im2, (w, h))
+
 
         # Initialize m tensor and patch tensor as full of ones, shape W x H
         m = torch.ones((self.w, self.h)).long()  # convert to long type
