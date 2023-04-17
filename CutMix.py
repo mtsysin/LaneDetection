@@ -70,6 +70,7 @@ class CutMix():
         patch[Px:Px+Pw,Py:Py+Ph] = 0
         m = torch.bitwise_xor(m, patch)
 
+        m = m.unsqueeze(-1).expand(-1, -1, im1.size(2))
         # Compute new cutmix training image by using hadamard product of m and im1, plus 1-m hadamard im2
         im = (self.hadamard(m, im1)) + (self.hadamard(1-m, im2))
 

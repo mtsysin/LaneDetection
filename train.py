@@ -89,10 +89,9 @@ def main(alpha, cutmix_percentage):
                         # Apply CutMix only with the given probability
                         if np.random.rand() < cutmix_percentage:
                             # Get a random index from the current batch, different from the current index
-                            index2 = torch.randint(1, imgs.size(0) - 2, (1,))
-                            if index2 >= i:
-                                index2 += 1
-                            index2 = index2.item()
+                            indices = list(range(imgs.size(0)))
+                            indices.remove(i)
+                            index2 = np.random.choice(indices)
                             # Apply CutMix to the selected images and labels
                             cutmix_img, cutmix_label = cutmix.get_cutmix(imgs[i], imgs[index2], det[i], det[index2])
                             # Replace the original images and labels with the CutMix-augmented versions
