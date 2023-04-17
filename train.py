@@ -93,10 +93,10 @@ def main(alpha, cutmix_percentage):
                             indices.remove(i)
                             index2 = np.random.choice(indices)
                             # Apply CutMix to the selected images and labels
-                            cutmix_img, cutmix_label = cutmix.get_cutmix(imgs[i], imgs[index2], det[i], det[index2])
+                            cutmix_img, cutmix_label = cutmix.get_cutmix(imgs[i], imgs[index2], seg[i], seg[index2])
                             # Replace the original images and labels with the CutMix-augmented versions
                             imgs[i] = cutmix_img
-                            det[i] = cutmix_label
+                            seg[i] = cutmix_label
                             
                 except IndexError as e:
                     print(f"IndexError: {e}. batch size={imgs.size(0)}, index2={index2}, i={i}")
