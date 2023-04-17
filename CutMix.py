@@ -58,7 +58,8 @@ class CutMix():
         im = im1 * (1 - mask) + im2 * mask
 
         # Create the new label after cutmix
-        lab = lab1 * lam + lab2 * (1 - lam)
+        lab = lab1 * torch.tensor(lam) + lab2 * torch.tensor(1 - lam)
+
 
         return im, lab
 
