@@ -27,6 +27,8 @@ class CutMix():
 
     def hadamard(self, m, x):
         # Element-wise product of two tensors
+        if m.shape[-1] != x.shape[-1]:
+            raise ValueError("m and x must have the same number of channels.")
         return m * x
 
     def get_cutmix(self, im1, im2, lab1, lab2):
@@ -75,6 +77,8 @@ class CutMix():
 
         # Compute corresponding training label by using lambda * label1 + (1 - lambda) * label2
         lab = lam * lab1 + (1 - lam) * lab2
+        
+
 
         return im, lab
 
