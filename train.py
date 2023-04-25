@@ -24,10 +24,6 @@ device = torch.cuda.set_device(1)
 print(f"CUDA device: {torch.cuda.current_device()}")
 print(f"CUDA device count: {torch.cuda.device_count()}")
 
-'''
-Author: Pume Tuchinda
-'''
-
 
 ANCHORS = [[(12,16),(19,36),(40,28)], [(36,75),(76,55),(72,146)], [(142,110),(192,243),(459,401)]]
 
@@ -70,35 +66,47 @@ def main():
                                 num_workers=args.num_workers,
                                 shuffle=False)
                   
-    imgs, det, seg = next(iter(train_loader)) # First batch
+    #imgs, det, seg = next(iter(train_loader)) # First batch
     model.train()
 
     for epoch in tqdm.tqdm(range(args.epoch)):
         #--------------------------------------------------------------------------------------
         #Train
         
-        #for imgs, det, lane, drivable in train_loader:
-        imgs, seg = imgs.to(device), seg.to(device)  
-        model.train()
-        running_loss = 0
+        for i in range(4):
+            imgs, det, seg = next(iter(train_loader))
+            imgs, seg = imgs.to(device), seg.to(device)  
+            model.train()
+            running_loss = 0
 
-        pdet, pseg = model(imgs)
-        
-        loss = loss_fn(pseg, seg.float())
+            pdet, pseg = model(imgs)
+            
+            loss = loss_fn(pseg, seg.float())
 
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        
-        running_loss += loss.item()
-        writer.add_scalar("Loss/train", running_loss, epoch)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            
+            running_loss += loss.item()
+            writer.add_scalar("Loss/train", running_loss, epoch)
 
-        writer.flush()
+            writer.flush()
     
+    # Inference on validation for evaluation
+    for i in range(4):
+            imgs, det, seg = next(iter(val_loader))
+            imgs, seg = imgs.to(device), seg.to(device)  
 
+            pdet, pseg = model(imgs)
+    
+    
+    '''
+    torch.save(model.state_dict(), 'out/model.pt')
+    torch.save(model, 'out/model.pth')
     torch.save(imgs, 'out/imgs.pt')
     torch.save(seg, 'out/seg.pt')
     torch.save(pseg, 'out/pseg.pt')
+    ''''
 
 
 if __name__ == '__main__':
