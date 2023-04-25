@@ -1,6 +1,7 @@
 import argparse
 
 import os
+import numpy as np
 import torch
 import torchvision.transforms as transforms
 import torch.optim as optim
@@ -13,6 +14,7 @@ from model.model import YoloMulti
 from bdd100k import BDD100k
 #from utils import non_max_supression, mean_average_precission, intersection_over_union
 from loss import MultiLoss, SegmentationLoss, DetectionLoss
+from utils import SegmentationMetric
 
 import matplotlib.pyplot as plt
 import tqdm
@@ -43,6 +45,7 @@ def main():
 
     #Load model
     model = YoloMulti().to(device)
+    metric = SegmentationMetric()
 
     #Set optimizer and loss function
     optimizer = optim.Adam(model.parameters(), lr=1e-4) # Can try 6e-4
@@ -68,18 +71,23 @@ def main():
                   
     #imgs, det, seg = next(iter(train_loader)) # First batch
     model.train()
+    groundtruths = [0] * (args.epoch*10)
+    counts = 0
 
     for epoch in tqdm.tqdm(range(args.epoch)):
         #--------------------------------------------------------------------------------------
         #Train
         
-        for i in range(4):
-            imgs, det, seg = next(iter(train_loader))
-            imgs, seg = imgs.to(device), seg.to(device)  
+        for _ in range(4):
+            imgs, _, seg = next(iter(train_loader))
+            imgs, seg = imgs.to(device), seg.to(device) 
+            groundtruths[counts] = (imgs, seg)
+            counts += 1
+             
             model.train()
             running_loss = 0
 
-            pdet, pseg = model(imgs)
+            _, pseg = model(imgs)
             
             loss = loss_fn(pseg, seg.float())
 
@@ -93,11 +101,21 @@ def main():
             writer.flush()
     
     # Inference on validation for evaluation
-    for i in range(4):
-            imgs, det, seg = next(iter(val_loader))
-            imgs, seg = imgs.to(device), seg.to(device)  
+    mean_iou = [0] * 12
+    iou_counts = [0] * 12
+    for i in range(len(groundtruths)):
+        imgs, seg = groundtruths[i]
+        imgs, seg = imgs.to(device), seg.to(device)  
 
-            pdet, pseg = model(imgs)
+        _, pseg = model(imgs)
+        
+        iou = metric.mean_iou(seg, pseg, args.batch)
+        iou[iou == np.nan] = 0
+        mean_iou += iou
+        iou[iou != 0] = 1
+        iou_counts += iou
+        
+    print(np.divide(mean_iou, iou_counts))
     
     
     '''
@@ -106,7 +124,7 @@ def main():
     torch.save(imgs, 'out/imgs.pt')
     torch.save(seg, 'out/seg.pt')
     torch.save(pseg, 'out/pseg.pt')
-    ''''
+    '''
 
 
 if __name__ == '__main__':
