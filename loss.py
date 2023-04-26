@@ -3,6 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from evaluate import DetectionMetric
+from utils import SegmentationMetric
+from statistics import mean
+import sys
+import numpy as np
+np.seterr(divide='ignore', invalid='ignore')
 
 ANCHORS = [[(12,16),(19,36),(40,28)], [(36,75),(76,55),(72,146)], [(142,110),(192,243),(459,401)]]
 
@@ -142,6 +147,7 @@ class SegmentationLoss(nn.Module):
     def __init__(self):
         super().__init__()
         self.epsilon = 1e-6
+        self.metric = SegmentationMetric()
 
     def _focal_loss(self, pred, target):
         num_classes = pred.size(1)
@@ -160,7 +166,25 @@ class SegmentationLoss(nn.Module):
             loss += classLoss.mean()
         
         return loss
-
+    
+    def _iou_loss(self, pred, target):
+        batch_size = pred.size(0)
+        num_classes = pred.size(1)
+        
+        mean_iou = [0] * num_classes
+        iou_counts = [0] * num_classes
+        for i in range(batch_size):
+            for class_num in range(num_classes):
+                iou = self.metric.iou(pred[i, class_num, ...], target[i, class_num, ...])
+                if (iou != -1):
+                    mean_iou[class_num] += float(iou.double())
+                    iou_counts[class_num] += 1
+                    
+        ious = np.divide(mean_iou, iou_counts, where=iou_counts!=0)
+                
+        return 1 - (mean(ious)/num_classes)
+                    
+        
     # def _dice_loss(self, pred, target):
     #     batchSize, numClasses = pred.size(0), pred.size(1)
     #     target = target.view(batchSize, numClasses, -1)
@@ -181,6 +205,7 @@ class SegmentationLoss(nn.Module):
 
     def forward(self, pred, target):
         focalLoss = self._focal_loss(pred, target)
+        iouLoss = self._iou_loss(pred, target)
         #diceLoss = self._dice_loss(pred, target)
 
-        return focalLoss# + diceLoss
+        return focalLoss + iouLoss# + diceLoss

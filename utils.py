@@ -68,4 +68,4 @@ class SegmentationMetric:
                     mean_iou[class_num] += float(iou.double())
                     iou_counts[class_num] += 1
 
-        return np.divide(mean_iou, iou_counts)
+        return np.divide(mean_iou, iou_counts, where=iou_counts!=0)
