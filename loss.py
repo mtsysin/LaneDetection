@@ -94,8 +94,14 @@ class DetectionLoss(nn.Module):
             # In target, the bounding box x and y coordiantes and w and h are scaled by the size of the cell!!!!
             # target[..., self.C+3:self.C+5] = torch.log(1e-6 + target[..., self.C+3:self.C+5] / anchor)
 
-            pred[..., self.C+1:self.C+3] = pred[..., self.C+1:self.C+3].sigmoid()
-            pred[..., self.C+3:self.C+5] = pred[..., self.C+3:self.C+5].exp() * anchor
+            bbox_detection = torch.cat(
+                (
+                    pred[..., self.C+1:self.C+3][Iobj].sigmoid(),
+                    (pred[..., self.C+3:self.C+5] + torch.log(anchor))[Iobj].exp()
+                ),
+                dim = -1
+            )
+            # print("maximum:", torch.max(pred[..., self.C+3:self.C+5]))
 
             # print("pred.shape", pred.shape)
             # print("target.shape", target.shape)
@@ -104,7 +110,7 @@ class DetectionLoss(nn.Module):
             # print("sample of OBJ part", pred[..., self.C+1:self.C+5][Iobj][:2])
 
 
-            iou = self.metric.box_iou(pred[..., self.C+1:self.C+5][Iobj], target[..., self.C+1:self.C+5][Iobj], xyxy=False, CIoU=True).mean()
+            iou = self.metric.box_iou(bbox_detection, target[..., self.C+1:self.C+5][Iobj], xyxy=False, CIoU=True).mean()
             ciou_loss += 1 - iou
             # ciou_loss += self.loss(pred[..., self.C+1:self.C+5][Iobj], target[..., self.C+1:self.C+5][Iobj])
 
@@ -117,9 +123,7 @@ class DetectionLoss(nn.Module):
             noobj_loss += self._focal_loss(pred[..., self.C:self.C+1][Inoobj], target[..., self.C:self.C+1][Inoobj])
             class_loss += self._focal_loss(pred[..., :self.C][Iobj], target[..., :self.C][Iobj])
 
-        print(ciou_loss, obj_loss, noobj_loss, class_loss)
-
-        return self.alpha_box * ciou_loss + self.alpha_class * class_loss + self.alpha_obj * (obj_loss + noobj_loss)
+        return self.alpha_box * ciou_loss + self.alpha_class * class_loss + self.alpha_obj * (obj_loss + noobj_loss), (ciou_loss.item(), obj_loss.item(), noobj_loss.item(), class_loss.item())
     
     def _focal_loss(self, preds, targets, alpha=0.25, gamma=2, reduction="mean"):
         '''

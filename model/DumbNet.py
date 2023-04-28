@@ -6,6 +6,7 @@ import torch
 from .PANet import ConvBlock, PANet
 from .CSPDarknet import CSPDarknet
 
+"""Simple neural net for testing"""
 
 class Mish(nn.Module):
     def __init__(self):
@@ -88,9 +89,9 @@ class DumbNet(nn.Module):
         self.conv5 = ConvBlock(in_channels=128, out_channels=256, filter_size=3, stride = 2)
         # self.conv6 = ConvBlock(in_channels=256, out_channels=512, filter_size=3, stride = 2)
 
-        self.out1 = ConvBlock(in_channels=64, out_channels=self.num_output * self.num_anchors, filter_size=1, stride = 1)
-        self.out2 = ConvBlock(in_channels=128, out_channels=self.num_output * self.num_anchors, filter_size=1, stride = 1)
-        self.out3 = ConvBlock(in_channels=256, out_channels=self.num_output * self.num_anchors, filter_size=1, stride = 1)
+        self.out1 = nn.Conv2d(in_channels=64, out_channels=self.num_output * self.num_anchors, kernel_size=1)
+        self.out2 = nn.Conv2d(in_channels=128, out_channels=self.num_output * self.num_anchors, kernel_size=1)
+        self.out3 = nn.Conv2d(in_channels=256, out_channels=self.num_output * self.num_anchors, kernel_size=1)
 
     def forward(self, x):
         '''
@@ -117,5 +118,5 @@ class DumbNet(nn.Module):
         b, _, j, i = out3.shape
         out3 = out3.view(b, self.num_anchors, j, i, self.num_output)
         
-        return (out1, out2, out3), 4
+        return (out1, out2, out3), out3
     

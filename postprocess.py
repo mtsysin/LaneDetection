@@ -77,7 +77,7 @@ def nms(bboxes_batch, iou_threshold, conf_threshold):
 
         mask = bboxes[:, 1] >= conf_threshold
         bboxes = bboxes[mask]
-        print("shape of bboxes after confidence threshold", bboxes.shape)
+        # print("shape of bboxes after confidence threshold", bboxes.shape)
 
         # Sort the boxes by their confidence scores in descending order
         confidences = bboxes[:, 1]
@@ -87,7 +87,7 @@ def nms(bboxes_batch, iou_threshold, conf_threshold):
         bboxes_after_nms = []
 
         while len(bboxes) > 0:                                                   # While we still have bboxes
-            print("shape of bboxes in nms", bboxes.shape)
+            # print("shape of bboxes in nms", bboxes.shape)
             chosen_box = bboxes[0]
 
             mask = detection_metric.box_iou(chosen_box[None ,2:], bboxes[... ,2:], xyxy=False).squeeze(-1) < iou_threshold
@@ -114,20 +114,33 @@ def process_prediction(prediction, img_height, img_width, anchor, C=13, true_pre
     gridy, gridx = torch.meshgrid([torch.arange(gy), torch.arange(gx)], indexing='ij')
 
     if true_prediction:
-        prediction[..., C+1:C+3] = prediction[..., C+1:C+3].sigmoid()                           # Convert predictions to the format where everything is represented as a fraction of a cell size
-        print("234123412341234", anchor)
-        prediction[..., C+3:C+5] = prediction[..., C+3:C+5].exp() * anchor
-
-    if true_prediction:
         confidence = prediction[..., C].sigmoid()                                               # clamp the confidence between 0 and 1 so we can represent it as percentage
     else:
         confidence = prediction[..., C]
 
+    # something = prediction[..., C+3:C+5] > 1.069e+05
+    something = confidence > 0.8
+    print("SOMETHING_PREDICTION", prediction[something].shape, prediction[something][..., C+3:C+5])
+
+    if true_prediction:
+        bbox_detection = torch.cat(                                                             # Convert predictions to the format where everything is represented as a fraction of a cell size
+            (
+                prediction[..., C+1:C+3].sigmoid(),
+                (prediction[..., C+3:C+5] + torch.log(anchor)).exp()
+            ),
+            dim = -1
+        )
+        # prediction[..., C+1:C+3] = prediction[..., C+1:C+3].sigmoid()                           
+        # prediction[..., C+3:C+5] = prediction[..., C+3:C+5].exp() * anchor
+    else:
+        bbox_detection = prediction[..., C+1:C+5]
+
+
     predicted_class = torch.argmax(prediction[..., :C], dim=-1)
-    x = (prediction[..., C+1] + gridx) / gx * img_width                                     # Convert x and y to acual pixel values on image
-    y = (prediction[..., C+2] + gridy) / gy * img_height
-    width = prediction[..., C+3] / gx * img_width                                           # Do the same for w and h
-    height = prediction[..., C+4] / gy * img_height
+    x = (bbox_detection[..., 0] + gridx) / gx * img_width                                     # Convert x and y to acual pixel values on image
+    y = (bbox_detection[..., 1] + gridy) / gy * img_height
+    width = bbox_detection[..., 2] / gx * img_width                                           # Do the same for w and h
+    height = bbox_detection[..., 3] / gy * img_height
     detection = torch.stack((predicted_class, confidence, x, y, width, height), dim=-1).view(batch_size, -1, 6)
 
     return detection   
@@ -140,13 +153,13 @@ def get_bboxes(predictions, iou_threshold, conf_threshold, true_prediction=True)
     # Prepare anchors:
     if true_prediction:
         anchors = torch.tensor(ANCHORS)
-        print(anchors)
+        # print(anchors)
         grid_scales = torch.tensor(GRID_SCALES)
-        print(grid_scales)
+        # print(grid_scales)
         size = torch.tensor([H, W])
-        print(size)
+        # print(size)
         cell_sizes = (size / grid_scales).repeat_interleave(3, dim=0).view(3, 3, 2)
-        print(cell_sizes)
+        # print(cell_sizes)
         anchors = anchors / cell_sizes
         print(anchors)
     else:
@@ -155,9 +168,12 @@ def get_bboxes(predictions, iou_threshold, conf_threshold, true_prediction=True)
     detections = []
     for i, prediction in enumerate(predictions):                                                # For all prediction scales: i - number of scale, prediction - prediction for the corresponding scale
         anchor = torch.tensor(anchors[i]).view(1, 3, 1, 1, 2)                                   # Get the anchor boxes corresponding to the chosen scale, view: (Batch, anchor index, sy, sx, box dimension)
+        print(f"anchor {i}", anchor)
         detections.append(process_prediction(prediction, 384, 640, anchor, true_prediction=true_prediction))    # Process detection
     detection = torch.cat(tuple(detections), dim=1)
     print("detection.shape", detection.shape)
+    something = detection[..., 4] > 1.069e+05
+    print("SOMETHING", something, something.sum())
     print(detection[0][2:7, ...])
     nms_b = nms(detection, iou_threshold, conf_threshold)                            # Perform non-maximum suppression on the resulting list of bounding boxes
 

@@ -16,7 +16,7 @@ class Mish(torch.nn.Module):
         - Obtain parent class's information, functions, and fields using super().__init__() of nn.Module
         '''
         super(Mish, self).__init__()
-        self.relu = nn.LeakyReLU(0.1)
+        # self.relu = nn.LeakyReLU(0.1)
 
     def forward(self, x):
         return x * torch.tanh(torch.nn.functional.softplus(x))
